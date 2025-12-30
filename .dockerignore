@@ -1,0 +1,10 @@
+# .dockerignore
+target/
+!target/*.jar
+.git
+.gitignore
+README.md
+*.md
+.mvn/wrapper/maven-wrapper.jar
+mvnw
+mvnw.cmd

@@ -1,0 +1,27 @@
+# render.yaml
+services:
+  - type: web
+    name: badminton-backend
+    env: docker
+    region: singapore
+    plan: free
+    branch: main
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: DATABASE_URL
+        fromDatabase:
+          name: badminton-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRATION
+        value: 86400000
+
+databases:
+  - name: badminton-db
+    databaseName: badminton
+    user: badminton_user
+    region: singapore
+    plan: free
