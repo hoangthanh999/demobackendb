@@ -342,8 +342,7 @@ public class MoMoServiceImpl implements MoMoService {
                     .extraData(payment.getId().toString())
                     .statusDescription(getStatusDescription(resultCode))
                     .canConfirmManually(resultCode == 0)
-                    .status(payment.getStatus().name())
-                    .paidAt(payment.getPaidAt())
+
                     .build();
         }
 
