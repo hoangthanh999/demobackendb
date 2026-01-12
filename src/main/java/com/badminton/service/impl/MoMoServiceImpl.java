@@ -4,6 +4,7 @@ import com.badminton.config.MoMoConfig;
 import com.badminton.dto.request.MoMoWebhookRequest;
 import com.badminton.dto.request.PaymentRequest;
 import com.badminton.dto.response.MoMoPaymentResponse;
+import com.badminton.dto.response.MoMoTransactionStatusResponse;
 import com.badminton.entity.Booking;
 import com.badminton.entity.Payment;
 import com.badminton.exception.BadRequestException;
@@ -242,5 +243,172 @@ public class MoMoServiceImpl implements MoMoService {
                 .hmacHex(rawSignature);
 
         return signature.equals(webhook.getSignature());
+    }
+
+    @Override
+    public MoMoTransactionStatusResponse queryTransactionStatus(String orderId) {
+        log.info("Querying MoMo transaction status for orderId: {}", orderId);
+
+        Payment payment = paymentRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thanh toán với orderId: " + orderId));
+
+        try {
+            // Tạo request query transaction
+            String requestId = UUID.randomUUID().toString();
+
+            Map<String, Object> queryRequest = new HashMap<>();
+            queryRequest.put("partnerCode", moMoConfig.getPartnerCode());
+            queryRequest.put("requestId", requestId);
+            queryRequest.put("orderId", orderId);
+            queryRequest.put("lang", "vi");
+
+            // Tạo signature cho query
+            String rawSignature = "accessKey=" + moMoConfig.getAccessKey() +
+                    "&orderId=" + orderId +
+                    "&partnerCode=" + moMoConfig.getPartnerCode() +
+                    "&requestId=" + requestId;
+
+            String signature = new HmacUtils(HmacAlgorithms.HMAC_SHA_256, moMoConfig.getSecretKey())
+                    .hmacHex(rawSignature);
+            queryRequest.put("signature", signature);
+
+            // Gọi API query transaction của MoMo
+            String queryEndpoint = "https://test-payment.momo.vn/v2/gateway/api/query";
+            String jsonRequest = objectMapper.writeValueAsString(queryRequest);
+
+            log.info("MoMo Query Request: {}", jsonRequest);
+
+            try (CloseableHttpClient client = HttpClients.createDefault()) {
+                HttpPost httpPost = new HttpPost(queryEndpoint);
+                httpPost.setHeader("Content-Type", "application/json");
+                httpPost.setEntity(new StringEntity(jsonRequest, "UTF-8"));
+
+                try (CloseableHttpResponse response = client.execute(httpPost)) {
+                    String responseBody = EntityUtils.toString(response.getEntity());
+                    log.info("MoMo Query Response: {}", responseBody);
+
+                    Map<String, Object> momoResponse = objectMapper.readValue(responseBody, Map.class);
+
+                    Integer resultCode = (Integer) momoResponse.get("resultCode");
+                    String statusDescription = getStatusDescription(resultCode);
+                    Boolean canConfirmManually = (resultCode == 0); // Chỉ cho phép confirm nếu MoMo trả về success
+
+                    return MoMoTransactionStatusResponse.builder()
+                            .orderId(orderId)
+                            .requestId(requestId)
+                            .transId(momoResponse.get("transId") != null
+                                    ? Long.valueOf(momoResponse.get("transId").toString())
+                                    : null)
+                            .resultCode(resultCode)
+                            .message((String) momoResponse.get("message"))
+                            .amount(momoResponse.get("amount") != null
+                                    ? Long.valueOf(momoResponse.get("amount").toString())
+                                    : null)
+                            .payType((String) momoResponse.get("payType"))
+                            .responseTime(momoResponse.get("responseTime") != null
+                                    ? Long.valueOf(momoResponse.get("responseTime").toString())
+                                    : null)
+                            .extraData((String) momoResponse.get("extraData"))
+                            .statusDescription(statusDescription)
+                            .canConfirmManually(canConfirmManually)
+                            .build();
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("Error querying MoMo transaction status", e);
+            throw new BadRequestException("Không thể truy vấn trạng thái giao dịch: " + e.getMessage());
+        }
+    }
+
+    @Override
+    @Transactional
+    public void manualConfirmPayment(Long paymentId, String transactionId) {
+        log.info("Admin manually confirming payment: {}", paymentId);
+
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thanh toán"));
+
+        // Kiểm tra trạng thái hiện tại
+        if (payment.getStatus() == Payment.PaymentStatus.COMPLETED) {
+            throw new BadRequestException("Thanh toán này đã được xác nhận trước đó");
+        }
+
+        if (payment.getStatus() == Payment.PaymentStatus.FAILED) {
+            throw new BadRequestException("Không thể xác nhận thanh toán đã thất bại");
+        }
+
+        // Query trạng thái từ MoMo để verify
+        MoMoTransactionStatusResponse momoStatus = queryTransactionStatus(payment.getOrderId());
+
+        if (momoStatus.getResultCode() != 0) {
+            throw new BadRequestException("MoMo chưa xác nhận thanh toán thành công. " +
+                    "Mã lỗi: " + momoStatus.getResultCode() + " - " + momoStatus.getMessage());
+        }
+
+        // Verify số tiền
+        BigDecimal expectedAmount = payment.getPaymentType() == Payment.PaymentType.FULL
+                ? payment.getAmount()
+                : payment.getDepositAmount();
+
+        if (momoStatus.getAmount() != null &&
+                !expectedAmount.equals(BigDecimal.valueOf(momoStatus.getAmount()))) {
+            throw new BadRequestException("Số tiền không khớp. Mong đợi: " + expectedAmount +
+                    ", Thực tế: " + momoStatus.getAmount());
+        }
+
+        // Cập nhật payment
+        payment.setTransactionId(transactionId != null ? transactionId
+                : (momoStatus.getTransId() != null ? momoStatus.getTransId().toString() : null));
+        payment.setPaidAt(LocalDateTime.now());
+
+        if (payment.getPaymentType() == Payment.PaymentType.FULL) {
+            payment.setStatus(Payment.PaymentStatus.COMPLETED);
+        } else {
+            payment.setStatus(Payment.PaymentStatus.PARTIAL);
+        }
+
+        // Cập nhật booking
+        Booking booking = payment.getBooking();
+        booking.setStatus(Booking.BookingStatus.CONFIRMED);
+
+        paymentRepository.save(payment);
+        bookingRepository.save(booking);
+
+        log.info("Payment {} manually confirmed successfully by admin", paymentId);
+    }
+
+    private String getStatusDescription(Integer resultCode) {
+        if (resultCode == null)
+            return "Không xác định";
+
+        return switch (resultCode) {
+            case 0 -> "Giao dịch thành công";
+            case 9000 -> "Giao dịch đã được xác nhận thành công";
+            case 8000 -> "Giao dịch đang chờ xử lý";
+            case 1000 -> "Giao dịch đã được khởi tạo, chờ người dùng xác nhận thanh toán";
+            case 1001 -> "Giao dịch thất bại do tài khoản người dùng không đủ tiền";
+            case 1002 -> "Giao dịch bị từ chối bởi nhà phát hành tài khoản người dùng";
+            case 1003 -> "Giao dịch bị hủy";
+            case 1004 -> "Giao dịch thất bại do số tiền vượt quá hạn mức thanh toán";
+            case 1005 -> "Giao dịch thất bại do url hoặc QR code đã hết hạn";
+            case 1006 -> "Giao dịch thất bại do người dùng đã từ chối xác nhận thanh toán";
+            case 1007 -> "Giao dịch bị từ chối vì tài khoản người dùng đang bị khóa";
+            case 1026 -> "Giao dịch bị hạn chế theo thể lệ chương trình khuyến mãi";
+            case 1080 -> "Giao dịch hoàn tiền bị từ chối";
+            case 1081 -> "Giao dịch hoàn tiền đang được xử lý";
+            case 2001 -> "Giao dịch thất bại do sai thông tin";
+            case 2007 -> "Đã hết thời gian thanh toán";
+            case 3001 -> "Giao dịch bị từ chối bởi MoMo";
+            case 3002 -> "Giao dịch không hợp lệ";
+            case 3003 -> "Giao dịch bị từ chối vì tài khoản merchant không tồn tại";
+            case 3004 -> "Giao dịch bị từ chối vì số tiền không hợp lệ";
+            case 4001 -> "Giao dịch thất bại do lỗi hệ thống";
+            case 4010 -> "Đơn hàng không tồn tại";
+            case 4011 -> "Yêu cầu bị từ chối vì đã có yêu cầu xử lý trước đó";
+            case 4015 -> "Giao dịch không được phép hoàn";
+            case 4100 -> "Giao dịch thất bại do lỗi kết nối";
+            default -> "Mã lỗi: " + resultCode;
+        };
     }
 }

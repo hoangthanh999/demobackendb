@@ -18,9 +18,15 @@ public class PaymentResponse {
     private Long id;
     private Long bookingId;
     private BigDecimal amount;
+    private BigDecimal depositAmount;
+    private BigDecimal remainingAmount;
     private String paymentMethod;
+    private String paymentType;
     private String status;
     private String transactionId;
+    private String orderId;
+    private String requestId;
     private LocalDateTime createdAt;
     private LocalDateTime paidAt;
+    private LocalDateTime expiredAt;
 }
