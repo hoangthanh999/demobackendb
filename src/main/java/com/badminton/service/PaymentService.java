@@ -11,6 +11,9 @@ public interface PaymentService {
 
     PaymentResponse getPaymentByBookingId(Long bookingId);
 
+    // ✅ THÊM MỚI
+    PaymentResponse getPaymentByOrderId(String orderId);
+
     Page<PaymentResponse> getAllPayments(Pageable pageable);
 
     Page<PaymentResponse> getPaymentsByStatus(String status, Pageable pageable);

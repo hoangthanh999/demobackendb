@@ -67,6 +67,7 @@ public class SecurityConfig {
 
                         // ✅ MoMo webhook endpoint (QUAN TRỌNG!)
                         .requestMatchers("/payments/momo/webhook").permitAll()
+                        .requestMatchers("/payments/mock/**").permitAll()
 
                         // ✅ Error endpoint
                         .requestMatchers("/error").permitAll()
@@ -115,3 +116,4 @@ public class SecurityConfig {
         return source;
     }
 }
+    

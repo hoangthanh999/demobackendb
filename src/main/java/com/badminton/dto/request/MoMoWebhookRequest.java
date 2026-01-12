@@ -7,6 +7,7 @@ public class MoMoWebhookRequest {
     private String partnerCode;
     private String orderId;
     private String requestId;
+    
     private Long amount;
     private String orderInfo;
     private String orderType;

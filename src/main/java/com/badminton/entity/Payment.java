@@ -2,6 +2,7 @@ package com.badminton.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
@@ -14,6 +15,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder // ✅ Thêm @Builder
 public class Payment {
 
     @Id
@@ -21,17 +23,17 @@ public class Payment {
     private Long id;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "booking_id", nullable = false)
+    @JoinColumn(name = "booking_id", nullable = false, unique = true) // ✅ Thêm unique = true
     private Booking booking;
 
     @Column(nullable = false)
     private BigDecimal amount;
 
     @Column(nullable = false)
-    private BigDecimal depositAmount; // Số tiền cọc
+    private BigDecimal depositAmount;
 
     @Column(nullable = false)
-    private BigDecimal remainingAmount; // Số tiền còn lại
+    private BigDecimal remainingAmount;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -43,16 +45,16 @@ public class Payment {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private PaymentType paymentType; // FULL hoặc DEPOSIT
+    private PaymentType paymentType;
 
     @Column(unique = true)
     private String transactionId;
 
     @Column(unique = true)
-    private String orderId; // MoMo order ID
+    private String orderId;
 
     @Column(unique = true)
-    private String requestId; // MoMo request ID
+    private String requestId;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
@@ -60,23 +62,17 @@ public class Payment {
 
     private LocalDateTime paidAt;
 
-    private LocalDateTime expiredAt; // Thời gian hết hạn thanh toán
+    private LocalDateTime expiredAt;
 
     public enum PaymentMethod {
         CASH, BANK_TRANSFER, MOMO, VNPAY
     }
 
     public enum PaymentStatus {
-        PENDING, // Chờ thanh toán
-        COMPLETED, // Đã thanh toán đủ
-        PARTIAL, // Đã cọc, chưa thanh toán hết
-        FAILED, // Thanh toán thất bại
-        REFUNDED, // Đã hoàn tiền
-        EXPIRED // Hết hạn thanh toán
+        PENDING, COMPLETED, PARTIAL, FAILED, REFUNDED, EXPIRED
     }
 
     public enum PaymentType {
-        FULL, // Thanh toán toàn bộ
-        DEPOSIT // Thanh toán cọc
+        FULL, DEPOSIT
     }
 }

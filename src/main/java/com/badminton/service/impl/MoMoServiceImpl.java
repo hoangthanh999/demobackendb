@@ -48,8 +48,14 @@ public class MoMoServiceImpl implements MoMoService {
     @Value("${payment.deposit-percentage}")
     private Integer depositPercentage;
 
+    // ✅ THÊM MỚI - Mock mode configuration
+    @Value("${payment.mock.enabled:true}")
+    private boolean mockEnabled;
+
     @Override
     public MoMoPaymentResponse createPayment(PaymentRequest request, Long userId) {
+        log.info("🔵 Creating MoMo payment for booking: {}", request.getBookingId());
+
         // Lấy booking
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đặt sân"));
@@ -64,13 +70,31 @@ public class MoMoServiceImpl implements MoMoService {
             throw new BadRequestException("Đặt sân này không thể thanh toán");
         }
 
-        // Kiểm tra đã có payment chưa
-        paymentRepository.findByBooking(booking).ifPresent(payment -> {
-            if (payment.getStatus() == Payment.PaymentStatus.COMPLETED ||
-                    payment.getStatus() == Payment.PaymentStatus.PARTIAL) {
-                throw new BadRequestException("Đặt sân này đã được thanh toán");
+        // ✅ Kiểm tra đã có payment chưa
+        if (paymentRepository.existsByBooking(booking)) {
+            Payment existingPayment = paymentRepository.findByBooking(booking)
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thanh toán"));
+
+            log.warn("⚠️ Payment already exists for booking: {}", booking.getId());
+
+            // Nếu đang pending, trả về payment cũ
+            if (existingPayment.getStatus() == Payment.PaymentStatus.PENDING) {
+                String payUrl = mockEnabled
+                        ? generateMockPayUrl(existingPayment.getOrderId())
+                        : ""; // Hoặc payUrl từ MoMo nếu có lưu
+
+                return MoMoPaymentResponse.builder()
+                        .payUrl(payUrl)
+                        .orderId(existingPayment.getOrderId())
+                        .requestId(existingPayment.getRequestId())
+                        .message("Sử dụng payment đã tạo trước đó")
+                        .resultCode(0)
+                        .build();
+            } else {
+                throw new BadRequestException(
+                        "Booking này đã có thanh toán với trạng thái: " + existingPayment.getStatus());
             }
-        });
+        }
 
         // Tính số tiền cần thanh toán
         BigDecimal totalAmount = booking.getTotalPrice();
@@ -92,6 +116,12 @@ public class MoMoServiceImpl implements MoMoService {
             remainingAmount = BigDecimal.ZERO;
         }
 
+        log.info("💰 Payment amounts:");
+        log.info("  Total: {} VND", totalAmount);
+        log.info("  Payment: {} VND", paymentAmount);
+        log.info("  Deposit: {} VND", depositAmount);
+        log.info("  Remaining: {} VND", remainingAmount);
+
         // Tạo payment record
         Payment payment = new Payment();
         payment.setBooking(booking);
@@ -103,7 +133,7 @@ public class MoMoServiceImpl implements MoMoService {
                 ? Payment.PaymentType.DEPOSIT
                 : Payment.PaymentType.FULL);
         payment.setStatus(Payment.PaymentStatus.PENDING);
-        payment.setExpiredAt(LocalDateTime.now().plusMinutes(15)); // Hết hạn sau 15 phút
+        payment.setExpiredAt(LocalDateTime.now().plusMinutes(15));
 
         String orderId = "BOOKING_" + booking.getId() + "_" + System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
@@ -112,8 +142,35 @@ public class MoMoServiceImpl implements MoMoService {
         payment.setRequestId(requestId);
 
         Payment savedPayment = paymentRepository.save(payment);
+        log.info("✅ Payment record created with ID: {}", savedPayment.getId());
 
-        // Tạo request đến MoMo
+        // ✅ MOCK MODE - Bỏ qua gọi MoMo API thật
+        if (mockEnabled) {
+            log.info("🎭 Mock mode enabled - generating mock payment URL");
+            String mockPayUrl = generateMockPayUrl(orderId);
+
+            return MoMoPaymentResponse.builder()
+                    .payUrl(mockPayUrl)
+                    .orderId(orderId)
+                    .requestId(requestId)
+                    .message("Mock payment created successfully")
+                    .resultCode(0)
+                    .build();
+        }
+
+        // ✅ REAL MOMO MODE - Gọi API MoMo thật
+        return createRealMoMoPayment(request, booking, savedPayment, paymentAmount, orderId, requestId);
+    }
+
+    // ✅ THÊM MỚI - Real MoMo payment
+    private MoMoPaymentResponse createRealMoMoPayment(
+            PaymentRequest request,
+            Booking booking,
+            Payment payment,
+            BigDecimal paymentAmount,
+            String orderId,
+            String requestId) {
+
         try {
             Map<String, Object> momoRequest = new HashMap<>();
             momoRequest.put("partnerCode", moMoConfig.getPartnerCode());
@@ -128,13 +185,13 @@ public class MoMoServiceImpl implements MoMoService {
                     : moMoConfig.getRedirectUrl());
             momoRequest.put("ipnUrl", moMoConfig.getIpnUrl());
             momoRequest.put("requestType", moMoConfig.getRequestType());
-            momoRequest.put("extraData", savedPayment.getId().toString());
+            momoRequest.put("extraData", payment.getId().toString());
             momoRequest.put("lang", "vi");
 
             // Tạo signature
             String rawSignature = "accessKey=" + moMoConfig.getAccessKey() +
                     "&amount=" + paymentAmount.longValue() +
-                    "&extraData=" + savedPayment.getId() +
+                    "&extraData=" + payment.getId() +
                     "&ipnUrl=" + moMoConfig.getIpnUrl() +
                     "&orderId=" + orderId +
                     "&orderInfo=" + momoRequest.get("orderInfo") +
@@ -149,7 +206,7 @@ public class MoMoServiceImpl implements MoMoService {
 
             // Gọi API MoMo
             String jsonRequest = objectMapper.writeValueAsString(momoRequest);
-            log.info("MoMo Request: {}", jsonRequest);
+            log.info("📤 MoMo Request: {}", jsonRequest);
 
             try (CloseableHttpClient client = HttpClients.createDefault()) {
                 HttpPost httpPost = new HttpPost(moMoConfig.getEndpoint());
@@ -158,7 +215,7 @@ public class MoMoServiceImpl implements MoMoService {
 
                 try (CloseableHttpResponse response = client.execute(httpPost)) {
                     String responseBody = EntityUtils.toString(response.getEntity());
-                    log.info("MoMo Response: {}", responseBody);
+                    log.info("📥 MoMo Response: {}", responseBody);
 
                     Map<String, Object> momoResponse = objectMapper.readValue(responseBody, Map.class);
 
@@ -173,19 +230,29 @@ public class MoMoServiceImpl implements MoMoService {
             }
 
         } catch (Exception e) {
-            log.error("Error creating MoMo payment", e);
+            log.error("❌ Error creating MoMo payment", e);
             throw new BadRequestException("Không thể tạo thanh toán: " + e.getMessage());
         }
     }
 
+    // ✅ THÊM MỚI - Generate mock payment URL
+    private String generateMockPayUrl(String orderId) {
+        // Format: mock://payment?orderId=xxx&resultCode=0
+        return String.format("mock://payment?orderId=%s&resultCode=0", orderId);
+    }
+
     @Override
     public void handleWebhook(MoMoWebhookRequest webhook) {
-        log.info("Received MoMo webhook: {}", webhook);
+        log.info("📥 Received MoMo webhook: {}", webhook);
 
-        // Verify signature
-        if (!verifySignature(webhook)) {
-            log.error("Invalid signature from MoMo webhook");
-            throw new BadRequestException("Invalid signature");
+        // ✅ Bỏ qua verify signature trong mock mode
+        if (!mockEnabled) {
+            if (!verifySignature(webhook)) {
+                log.error("❌ Invalid signature from MoMo webhook");
+                throw new BadRequestException("Invalid signature");
+            }
+        } else {
+            log.info("🎭 Mock mode - skipping signature verification");
         }
 
         // Tìm payment
@@ -195,7 +262,9 @@ public class MoMoServiceImpl implements MoMoService {
         // Kiểm tra resultCode
         if (webhook.getResultCode() == 0) {
             // Thanh toán thành công
-            payment.setTransactionId(webhook.getTransId().toString());
+            payment.setTransactionId(webhook.getTransId() != null
+                    ? webhook.getTransId().toString()
+                    : "MOCK_TRANS_" + System.currentTimeMillis());
             payment.setPaidAt(LocalDateTime.now());
 
             if (payment.getPaymentType() == Payment.PaymentType.FULL) {
@@ -209,7 +278,7 @@ public class MoMoServiceImpl implements MoMoService {
             paymentRepository.save(payment);
             bookingRepository.save(payment.getBooking());
 
-            log.info("Payment completed successfully for orderId: {}", webhook.getOrderId());
+            log.info("✅ Payment completed successfully for orderId: {}", webhook.getOrderId());
         } else {
             // Thanh toán thất bại
             payment.setStatus(Payment.PaymentStatus.FAILED);
@@ -218,7 +287,7 @@ public class MoMoServiceImpl implements MoMoService {
             paymentRepository.save(payment);
             bookingRepository.save(payment.getBooking());
 
-            log.warn("Payment failed for orderId: {}, resultCode: {}",
+            log.warn("❌ Payment failed for orderId: {}, resultCode: {}",
                     webhook.getOrderId(), webhook.getResultCode());
         }
     }
@@ -247,13 +316,44 @@ public class MoMoServiceImpl implements MoMoService {
 
     @Override
     public MoMoTransactionStatusResponse queryTransactionStatus(String orderId) {
-        log.info("Querying MoMo transaction status for orderId: {}", orderId);
+        log.info("🔍 Querying MoMo transaction status for orderId: {}", orderId);
 
         Payment payment = paymentRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thanh toán với orderId: " + orderId));
 
+        // ✅ Mock mode - Trả về status từ database
+        if (mockEnabled) {
+            log.info("🎭 Mock mode - returning status from database");
+
+            Integer resultCode = payment.getStatus() == Payment.PaymentStatus.COMPLETED
+                    || payment.getStatus() == Payment.PaymentStatus.PARTIAL ? 0 : 1000;
+
+            return MoMoTransactionStatusResponse.builder()
+                    .orderId(orderId)
+                    .requestId(payment.getRequestId())
+                    .transId(payment.getTransactionId() != null
+                            ? Long.valueOf(payment.getTransactionId().replaceAll("[^0-9]", ""))
+                            : null)
+                    .resultCode(resultCode)
+                    .message("Mock transaction status")
+                    .amount(payment.getDepositAmount().longValue())
+                    .payType("napas")
+                    .responseTime(System.currentTimeMillis())
+                    .extraData(payment.getId().toString())
+                    .statusDescription(getStatusDescription(resultCode))
+                    .canConfirmManually(resultCode == 0)
+                    .status(payment.getStatus().name())
+                    .paidAt(payment.getPaidAt())
+                    .build();
+        }
+
+        // ✅ Real MoMo query
+        return queryRealMoMoStatus(orderId);
+    }
+
+    // ✅ THÊM MỚI - Real MoMo query
+    private MoMoTransactionStatusResponse queryRealMoMoStatus(String orderId) {
         try {
-            // Tạo request query transaction
             String requestId = UUID.randomUUID().toString();
 
             Map<String, Object> queryRequest = new HashMap<>();
@@ -272,11 +372,10 @@ public class MoMoServiceImpl implements MoMoService {
                     .hmacHex(rawSignature);
             queryRequest.put("signature", signature);
 
-            // Gọi API query transaction của MoMo
             String queryEndpoint = "https://test-payment.momo.vn/v2/gateway/api/query";
             String jsonRequest = objectMapper.writeValueAsString(queryRequest);
 
-            log.info("MoMo Query Request: {}", jsonRequest);
+            log.info("📤 MoMo Query Request: {}", jsonRequest);
 
             try (CloseableHttpClient client = HttpClients.createDefault()) {
                 HttpPost httpPost = new HttpPost(queryEndpoint);
@@ -285,13 +384,13 @@ public class MoMoServiceImpl implements MoMoService {
 
                 try (CloseableHttpResponse response = client.execute(httpPost)) {
                     String responseBody = EntityUtils.toString(response.getEntity());
-                    log.info("MoMo Query Response: {}", responseBody);
+                    log.info("📥 MoMo Query Response: {}", responseBody);
 
                     Map<String, Object> momoResponse = objectMapper.readValue(responseBody, Map.class);
 
                     Integer resultCode = (Integer) momoResponse.get("resultCode");
                     String statusDescription = getStatusDescription(resultCode);
-                    Boolean canConfirmManually = (resultCode == 0); // Chỉ cho phép confirm nếu MoMo trả về success
+                    Boolean canConfirmManually = (resultCode == 0);
 
                     return MoMoTransactionStatusResponse.builder()
                             .orderId(orderId)
@@ -316,7 +415,7 @@ public class MoMoServiceImpl implements MoMoService {
             }
 
         } catch (Exception e) {
-            log.error("Error querying MoMo transaction status", e);
+            log.error("❌ Error querying MoMo transaction status", e);
             throw new BadRequestException("Không thể truy vấn trạng thái giao dịch: " + e.getMessage());
         }
     }
@@ -324,7 +423,7 @@ public class MoMoServiceImpl implements MoMoService {
     @Override
     @Transactional
     public void manualConfirmPayment(Long paymentId, String transactionId) {
-        log.info("Admin manually confirming payment: {}", paymentId);
+        log.info("👤 Admin manually confirming payment: {}", paymentId);
 
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thanh toán"));
@@ -338,28 +437,34 @@ public class MoMoServiceImpl implements MoMoService {
             throw new BadRequestException("Không thể xác nhận thanh toán đã thất bại");
         }
 
-        // Query trạng thái từ MoMo để verify
-        MoMoTransactionStatusResponse momoStatus = queryTransactionStatus(payment.getOrderId());
+        // ✅ Trong mock mode, bỏ qua query MoMo
+        if (!mockEnabled) {
+            // Query trạng thái từ MoMo để verify
+            MoMoTransactionStatusResponse momoStatus = queryTransactionStatus(payment.getOrderId());
 
-        if (momoStatus.getResultCode() != 0) {
-            throw new BadRequestException("MoMo chưa xác nhận thanh toán thành công. " +
-                    "Mã lỗi: " + momoStatus.getResultCode() + " - " + momoStatus.getMessage());
-        }
+            if (momoStatus.getResultCode() != 0) {
+                throw new BadRequestException("MoMo chưa xác nhận thanh toán thành công. " +
+                        "Mã lỗi: " + momoStatus.getResultCode() + " - " + momoStatus.getMessage());
+            }
 
-        // Verify số tiền
-        BigDecimal expectedAmount = payment.getPaymentType() == Payment.PaymentType.FULL
-                ? payment.getAmount()
-                : payment.getDepositAmount();
+            // Verify số tiền
+            BigDecimal expectedAmount = payment.getPaymentType() == Payment.PaymentType.FULL
+                    ? payment.getAmount()
+                    : payment.getDepositAmount();
 
-        if (momoStatus.getAmount() != null &&
-                !expectedAmount.equals(BigDecimal.valueOf(momoStatus.getAmount()))) {
-            throw new BadRequestException("Số tiền không khớp. Mong đợi: " + expectedAmount +
-                    ", Thực tế: " + momoStatus.getAmount());
+            if (momoStatus.getAmount() != null &&
+                    !expectedAmount.equals(BigDecimal.valueOf(momoStatus.getAmount()))) {
+                throw new BadRequestException("Số tiền không khớp. Mong đợi: " + expectedAmount +
+                        ", Thực tế: " + momoStatus.getAmount());
+            }
+        } else {
+            log.info("🎭 Mock mode - skipping MoMo verification");
         }
 
         // Cập nhật payment
-        payment.setTransactionId(transactionId != null ? transactionId
-                : (momoStatus.getTransId() != null ? momoStatus.getTransId().toString() : null));
+        payment.setTransactionId(transactionId != null
+                ? transactionId
+                : "MANUAL_CONFIRM_" + System.currentTimeMillis());
         payment.setPaidAt(LocalDateTime.now());
 
         if (payment.getPaymentType() == Payment.PaymentType.FULL) {
@@ -375,7 +480,7 @@ public class MoMoServiceImpl implements MoMoService {
         paymentRepository.save(payment);
         bookingRepository.save(booking);
 
-        log.info("Payment {} manually confirmed successfully by admin", paymentId);
+        log.info("✅ Payment {} manually confirmed successfully by admin", paymentId);
     }
 
     private String getStatusDescription(Integer resultCode) {

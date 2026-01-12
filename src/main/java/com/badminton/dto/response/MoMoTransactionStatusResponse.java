@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime; // ✅ Import thêm
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -19,8 +21,12 @@ public class MoMoTransactionStatusResponse {
     private String payType;
     private Long responseTime;
     private String extraData;
-    
+
     // Thêm field để hiển thị cho admin
     private String statusDescription;
     private Boolean canConfirmManually;
+
+    // ✅ THÊM 2 FIELDS NÀY
+    private String status; // Payment status
+    private LocalDateTime paidAt; // Thời gian thanh toán
 }

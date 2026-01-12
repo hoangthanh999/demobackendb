@@ -22,8 +22,12 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Optional<Payment> findByRequestId(String requestId);
 
-    // ✅ THÊM MỚI
     Page<Payment> findByStatus(Payment.PaymentStatus status, Pageable pageable);
 
     List<Payment> findByStatus(Payment.PaymentStatus status);
+
+    // ✅ THÊM MỚI - Kiểm tra booking đã có payment chưa
+    boolean existsByBooking(Booking booking);
+
+    boolean existsByBookingId(Long bookingId);
 }

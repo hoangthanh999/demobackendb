@@ -45,17 +45,44 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success(response, "Tạo thanh toán thành công"));
     }
 
+    // ✅ THÊM MỚI - Mock payment confirmation
+    @PostMapping("/mock/confirm/{orderId}")
+    @PreAuthorize("hasAnyRole('USER', 'OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<PaymentResponse>> confirmMockPayment(
+            @PathVariable String orderId,
+            @RequestParam(defaultValue = "0") int resultCode) {
+
+        log.info("🎭 Mock payment confirmation: orderId={}, resultCode={}", orderId, resultCode);
+
+        // Tạo mock webhook request
+        MoMoWebhookRequest webhook = new MoMoWebhookRequest();
+        webhook.setOrderId(orderId);
+        webhook.setResultCode(resultCode);
+        webhook.setTransId(System.currentTimeMillis());
+
+
+        moMoService.handleWebhook(webhook);
+
+        PaymentResponse payment = paymentService.getPaymentByBookingId(
+                paymentService.getPaymentByOrderId(orderId).getBookingId());
+
+        return ResponseEntity.ok(ApiResponse.success(payment,
+                resultCode == 0 ? "Thanh toán thành công" : "Thanh toán thất bại"));
+    }
+
     @PostMapping("/momo/webhook")
     public ResponseEntity<Void> handleMoMoWebhook(@RequestBody MoMoWebhookRequest webhook) {
-        log.info("Received MoMo webhook: {}", webhook);
+        log.info("📥 Received MoMo webhook: {}", webhook);
         moMoService.handleWebhook(webhook);
         return ResponseEntity.ok().build();
     }
 
-    private User getUserFromAuth(Authentication authentication) {
-        String email = authentication.getName();
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+    @GetMapping("/booking/{bookingId}")
+    @PreAuthorize("hasAnyRole('USER', 'OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<PaymentResponse>> getPaymentByBooking(
+            @PathVariable Long bookingId) {
+        PaymentResponse payment = paymentService.getPaymentByBookingId(bookingId);
+        return ResponseEntity.ok(ApiResponse.success(payment));
     }
 
     @GetMapping("/admin/all")
@@ -75,7 +102,6 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success(payments));
     }
 
-    // ✅ ADMIN: Lọc payments theo trạng thái
     @GetMapping("/admin/status/{status}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Page<PaymentResponse>>> getPaymentsByStatus(
@@ -88,7 +114,6 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success(payments));
     }
 
-    // ✅ ADMIN: Xem payments đang chờ xử lý
     @GetMapping("/admin/pending")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<PaymentResponse>>> getPendingPayments() {
@@ -97,46 +122,35 @@ public class PaymentController {
                 "Có " + payments.size() + " thanh toán đang chờ xử lý"));
     }
 
-    // ✅ ADMIN: Kiểm tra trạng thái giao dịch trên MoMo
     @GetMapping("/admin/check-momo-status/{orderId}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<MoMoTransactionStatusResponse>> checkMoMoStatus(
             @PathVariable String orderId) {
-
         MoMoTransactionStatusResponse status = moMoService.queryTransactionStatus(orderId);
         return ResponseEntity.ok(ApiResponse.success(status,
                 "Trạng thái: " + status.getStatusDescription()));
     }
 
-    // ✅ ADMIN: Xác nhận thanh toán thủ công
     @PostMapping("/admin/manual-confirm/{paymentId}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> manualConfirmPayment(
             @PathVariable Long paymentId,
             @RequestParam(required = false) String transactionId) {
-
         moMoService.manualConfirmPayment(paymentId, transactionId);
-        return ResponseEntity.ok(ApiResponse.success(null,
-                "Xác nhận thanh toán thành công"));
+        return ResponseEntity.ok(ApiResponse.success(null, "Xác nhận thanh toán thành công"));
     }
 
-    // ✅ USER/OWNER/ADMIN: Xem payment của booking
-    @GetMapping("/booking/{bookingId}")
-    @PreAuthorize("hasAnyRole('USER', 'OWNER', 'ADMIN')")
-    public ResponseEntity<ApiResponse<PaymentResponse>> getPaymentByBooking(
-            @PathVariable Long bookingId) {
-
-        PaymentResponse payment = paymentService.getPaymentByBookingId(bookingId);
-        return ResponseEntity.ok(ApiResponse.success(payment));
-    }
-
-    // ✅ ADMIN: Xem chi tiết payment
     @GetMapping("/admin/{paymentId}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<PaymentResponse>> getPaymentById(
             @PathVariable Long paymentId) {
-
         PaymentResponse payment = paymentService.getPaymentById(paymentId);
         return ResponseEntity.ok(ApiResponse.success(payment));
+    }
+
+    private User getUserFromAuth(Authentication authentication) {
+        String email = authentication.getName();
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
     }
 }

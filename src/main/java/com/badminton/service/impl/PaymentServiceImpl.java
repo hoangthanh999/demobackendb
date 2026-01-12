@@ -35,6 +35,14 @@ public class PaymentServiceImpl implements PaymentService {
         return mapToPaymentResponse(payment);
     }
 
+    // ✅ THÊM METHOD NÀY
+    @Override
+    public PaymentResponse getPaymentByOrderId(String orderId) {
+        Payment payment = paymentRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thanh toán với orderId: " + orderId));
+        return mapToPaymentResponse(payment);
+    }
+
     @Override
     public Page<PaymentResponse> getAllPayments(Pageable pageable) {
         return paymentRepository.findAll(pageable)
