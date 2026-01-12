@@ -95,7 +95,8 @@ public class BookingServiceImpl implements BookingService {
         booking.setStatus(Booking.BookingStatus.PENDING);
 
         Booking savedBooking = bookingRepository.save(booking);
-        return mapToBookingResponse(savedBooking);
+        BookingResponse response = mapToBookingResponse(savedBooking);
+        return response;
     }
 
     @Override

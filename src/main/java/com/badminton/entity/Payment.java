@@ -27,6 +27,12 @@ public class Payment {
     @Column(nullable = false)
     private BigDecimal amount;
 
+    @Column(nullable = false)
+    private BigDecimal depositAmount; // Số tiền cọc
+
+    @Column(nullable = false)
+    private BigDecimal remainingAmount; // Số tiền còn lại
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PaymentMethod paymentMethod;
@@ -35,8 +41,18 @@ public class Payment {
     @Column(nullable = false)
     private PaymentStatus status = PaymentStatus.PENDING;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PaymentType paymentType; // FULL hoặc DEPOSIT
+
     @Column(unique = true)
     private String transactionId;
+
+    @Column(unique = true)
+    private String orderId; // MoMo order ID
+
+    @Column(unique = true)
+    private String requestId; // MoMo request ID
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
@@ -44,11 +60,23 @@ public class Payment {
 
     private LocalDateTime paidAt;
 
+    private LocalDateTime expiredAt; // Thời gian hết hạn thanh toán
+
     public enum PaymentMethod {
         CASH, BANK_TRANSFER, MOMO, VNPAY
     }
 
     public enum PaymentStatus {
-        PENDING, COMPLETED, FAILED, REFUNDED
+        PENDING, // Chờ thanh toán
+        COMPLETED, // Đã thanh toán đủ
+        PARTIAL, // Đã cọc, chưa thanh toán hết
+        FAILED, // Thanh toán thất bại
+        REFUNDED, // Đã hoàn tiền
+        EXPIRED // Hết hạn thanh toán
+    }
+
+    public enum PaymentType {
+        FULL, // Thanh toán toàn bộ
+        DEPOSIT // Thanh toán cọc
     }
 }
