@@ -13,6 +13,7 @@ import com.badminton.repository.CourtRepository;
 import com.badminton.repository.UserRepository;
 import com.badminton.service.BookingService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -22,9 +23,12 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -36,57 +40,134 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     public BookingResponse createBooking(BookingRequest request, Long userId) {
+        log.info("🔵 Creating booking for user: {}", userId);
+        log.info("  Court ID: {}", request.getCourtId());
+        log.info("  Date: {}", request.getBookingDate());
+        log.info("  Start Time: {}", request.getStartTime());
+        log.info("  End Time: {}", request.getEndTime());
+        log.info("  Court Number: {}", request.getCourtNumber());
+
+        // Validate user
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
 
+        // Validate court
         Court court = courtRepository.findById(request.getCourtId())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân"));
 
-        // Validate booking date
-        if (request.getBookingDate().isBefore(LocalDate.now())) {
+        log.info("  Court Name: {}", court.getName());
+        log.info("  Court Open Time: {}", court.getOpenTime());
+        log.info("  Court Close Time: {}", court.getCloseTime());
+
+        // Check court status
+        if (court.getStatus() != Court.CourtStatus.ACTIVE) {
+            throw new BadRequestException("Sân hiện không hoạt động");
+        }
+
+        // ✅ Parse times với error handling tốt hơn
+        LocalTime startTime;
+        LocalTime endTime;
+        LocalTime openTime;
+        LocalTime closeTime;
+
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
+
+            startTime = LocalTime.parse(request.getStartTime(), formatter);
+            endTime = LocalTime.parse(request.getEndTime(), formatter);
+            openTime = LocalTime.parse(court.getOpenTime(), formatter);
+            closeTime = LocalTime.parse(court.getCloseTime(), formatter);
+
+            log.info("✅ Parsed times successfully:");
+            log.info("  Start: {}", startTime);
+            log.info("  End: {}", endTime);
+            log.info("  Open: {}", openTime);
+            log.info("  Close: {}", closeTime);
+
+        } catch (DateTimeParseException e) {
+            log.error("❌ Time parsing error: {}", e.getMessage());
+            throw new BadRequestException(
+                    String.format("Format thời gian không hợp lệ. Vui lòng sử dụng format HH:mm (VD: 08:00). " +
+                            "Bạn đã nhập: Start=%s, End=%s",
+                            request.getStartTime(), request.getEndTime()));
+        }
+
+        // ✅ Validate booking date
+        LocalDate bookingDate = request.getBookingDate();
+        LocalDate today = LocalDate.now();
+
+        if (bookingDate.isBefore(today)) {
             throw new BadRequestException("Không thể đặt sân cho ngày trong quá khứ");
         }
 
-        // Validate time
-        LocalTime startTime = LocalTime.parse(request.getStartTime());
-        LocalTime endTime = LocalTime.parse(request.getEndTime());
-        LocalTime openTime = LocalTime.parse(court.getOpenTime());
-        LocalTime closeTime = LocalTime.parse(court.getCloseTime());
-
-        if (startTime.isBefore(openTime) || endTime.isAfter(closeTime)) {
-            throw new BadRequestException("Thời gian đặt sân không hợp lệ");
-        }
-
+        // ✅ Validate time logic
         if (startTime.isAfter(endTime) || startTime.equals(endTime)) {
-            throw new BadRequestException("Thời gian bắt đầu phải trước thời gian kết thúc");
+            throw new BadRequestException(
+                    String.format("Thời gian bắt đầu (%s) phải trước thời gian kết thúc (%s)",
+                            request.getStartTime(), request.getEndTime()));
         }
 
-        // Validate court number
+        // ✅ Validate court operating hours - CHI TIẾT HƠN
+        if (startTime.isBefore(openTime)) {
+            throw new BadRequestException(
+                    String.format("⏰ Sân chỉ mở cửa từ %s. Giờ bắt đầu của bạn (%s) quá sớm.",
+                            court.getOpenTime(), request.getStartTime()));
+        }
+
+        if (endTime.isAfter(closeTime)) {
+            throw new BadRequestException(
+                    String.format("⏰ Sân đóng cửa lúc %s. Giờ kết thúc của bạn (%s) quá muộn.",
+                            court.getCloseTime(), request.getEndTime()));
+        }
+
+        // ✅ Validate nếu thời gian nằm ngoài khung giờ hoạt động
+        if (startTime.isBefore(openTime) || endTime.isAfter(closeTime)) {
+            throw new BadRequestException(
+                    String.format("⏰ Sân chỉ mở cửa từ %s đến %s. " +
+                            "Thời gian đặt của bạn (%s - %s) không hợp lệ.",
+                            court.getOpenTime(), court.getCloseTime(),
+                            request.getStartTime(), request.getEndTime()));
+        }
+
+        // ✅ Validate court number
         if (request.getCourtNumber() < 1 || request.getCourtNumber() > court.getNumberOfCourts()) {
-            throw new BadRequestException("Số sân không hợp lệ");
+            throw new BadRequestException(
+                    String.format("Số sân không hợp lệ. Sân này có %d sân (từ 1 đến %d). Bạn chọn: %d",
+                            court.getNumberOfCourts(), court.getNumberOfCourts(), request.getCourtNumber()));
         }
 
-        // Check for conflicts
+        // ✅ Check for conflicts
         List<Booking> conflicts = bookingRepository.findConflictingBookings(
                 court.getId(),
-                request.getBookingDate(),
+                bookingDate,
                 request.getCourtNumber(),
                 startTime,
                 endTime);
 
         if (!conflicts.isEmpty()) {
-            throw new BadRequestException("Sân đã được đặt trong khung giờ này");
+            log.warn("❌ Found {} conflicting bookings", conflicts.size());
+            throw new BadRequestException(
+                    String.format("Sân số %d đã được đặt trong khung giờ %s - %s ngày %s",
+                            request.getCourtNumber(),
+                            request.getStartTime(),
+                            request.getEndTime(),
+                            bookingDate));
         }
 
-        // Calculate total price
+        // ✅ Calculate total price
         long hours = Duration.between(startTime, endTime).toHours();
-        BigDecimal totalPrice = court.getPricePerHour().multiply(BigDecimal.valueOf(hours));
+        if (hours < 1) {
+            throw new BadRequestException("Thời gian đặt sân tối thiểu là 1 giờ");
+        }
 
-        // Create booking
+        BigDecimal totalPrice = court.getPricePerHour().multiply(BigDecimal.valueOf(hours));
+        log.info("💰 Total price: {} VND ({} hours x {} VND)", totalPrice, hours, court.getPricePerHour());
+
+        // ✅ Create booking
         Booking booking = new Booking();
         booking.setUser(user);
         booking.setCourt(court);
-        booking.setBookingDate(request.getBookingDate());
+        booking.setBookingDate(bookingDate);
         booking.setStartTime(startTime);
         booking.setEndTime(endTime);
         booking.setCourtNumber(request.getCourtNumber());
@@ -95,8 +176,9 @@ public class BookingServiceImpl implements BookingService {
         booking.setStatus(Booking.BookingStatus.PENDING);
 
         Booking savedBooking = bookingRepository.save(booking);
-        BookingResponse response = mapToBookingResponse(savedBooking);
-        return response;
+        log.info("✅ Booking created successfully with ID: {}", savedBooking.getId());
+
+        return mapToBookingResponse(savedBooking);
     }
 
     @Override
@@ -135,7 +217,6 @@ public class BookingServiceImpl implements BookingService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
 
-        // ✅ SỬA: Cho phép ADMIN cập nhật bất kỳ booking nào
         boolean isOwner = booking.getCourt().getOwner().getId().equals(userId);
         boolean isAdmin = user.getRole() == User.UserRole.ADMIN;
 
@@ -156,8 +237,6 @@ public class BookingServiceImpl implements BookingService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
 
-        // ✅ SỬA: Cho phép user hủy booking của mình, hoặc ADMIN/OWNER hủy bất kỳ
-        // booking nào
         boolean isBookingOwner = booking.getUser().getId().equals(userId);
         boolean isCourtOwner = booking.getCourt().getOwner().getId().equals(userId);
         boolean isAdmin = user.getRole() == User.UserRole.ADMIN;
@@ -182,7 +261,6 @@ public class BookingServiceImpl implements BookingService {
         User user = userRepository.findById(ownerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
 
-        // ✅ SỬA: Cho phép ADMIN xem bookings của bất kỳ sân nào
         boolean isOwner = court.getOwner().getId().equals(ownerId);
         boolean isAdmin = user.getRole() == User.UserRole.ADMIN;
 
@@ -193,6 +271,12 @@ public class BookingServiceImpl implements BookingService {
         return bookingRepository.findByCourt(court).stream()
                 .map(this::mapToBookingResponse)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public Page<BookingResponse> getAllBookings(Pageable pageable) {
+        return bookingRepository.findAll(pageable)
+                .map(this::mapToBookingResponse);
     }
 
     private BookingResponse mapToBookingResponse(Booking booking) {
@@ -214,11 +298,4 @@ public class BookingServiceImpl implements BookingService {
                 .createdAt(booking.getCreatedAt())
                 .build();
     }
-
-    @Override
-    public Page<BookingResponse> getAllBookings(Pageable pageable) {
-        return bookingRepository.findAll(pageable)
-                .map(this::mapToBookingResponse);
-    }
-
 }
