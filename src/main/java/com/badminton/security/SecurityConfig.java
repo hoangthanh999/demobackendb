@@ -59,9 +59,19 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
 
                 .authorizeHttpRequests(auth -> auth
+                        // ✅ Auth endpoints
                         .requestMatchers("/auth/**").permitAll()
+
+                        // ✅ Courts endpoints (public)
                         .requestMatchers("/courts", "/courts/{id}", "/courts/search").permitAll()
+
+                        // ✅ MoMo webhook endpoint (QUAN TRỌNG!)
+                        .requestMatchers("/payments/momo/webhook").permitAll()
+
+                        // ✅ Error endpoint
                         .requestMatchers("/error").permitAll()
+
+                        // ✅ Tất cả request khác cần authentication
                         .anyRequest().authenticated())
 
                 .authenticationProvider(authenticationProvider())
@@ -74,11 +84,30 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
+
+        // ✅ Cho phép tất cả origins (development)
         configuration.setAllowedOriginPatterns(Arrays.asList("*"));
+
+        // ✅ Hoặc chỉ định cụ thể (production)
+        // configuration.setAllowedOrigins(Arrays.asList(
+        // "http://localhost:8081",
+        // "http://localhost:19006",
+        // "https://your-frontend-domain.com"
+        // ));
+
+        // ✅ Cho phép tất cả HTTP methods
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+
+        // ✅ Cho phép tất cả headers
         configuration.setAllowedHeaders(Arrays.asList("*"));
+
+        // ✅ Expose Authorization header
         configuration.setExposedHeaders(Arrays.asList("Authorization"));
+
+        // ✅ Cho phép credentials (cookies, authorization headers)
         configuration.setAllowCredentials(true);
+
+        // ✅ Cache preflight request trong 1 giờ
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

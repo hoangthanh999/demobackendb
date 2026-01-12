@@ -25,13 +25,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
+        String method = request.getMethod();
 
+        // ✅ Bỏ qua filter cho các endpoint public
         return path.startsWith("/auth/")
                 || path.equals("/courts")
                 || path.startsWith("/courts/search")
                 || path.matches("/courts/\\d+")
+                || path.equals("/payments/momo/webhook") // ✅ THÊM WEBHOOK
                 || path.equals("/error")
-                || request.getMethod().equalsIgnoreCase("OPTIONS");
+                || method.equalsIgnoreCase("OPTIONS"); // ✅ Bỏ qua OPTIONS (preflight)
     }
 
     @Override
