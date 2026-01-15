@@ -17,6 +17,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.http.HttpMethod;
 
 import java.util.Arrays;
 
@@ -59,21 +60,25 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
 
                 .authorizeHttpRequests(auth -> auth
-                        // ✅ Auth endpoints
+                        // Auth
                         .requestMatchers("/auth/**").permitAll()
 
-                        // ✅ Courts endpoints (public)
-                        .requestMatchers("/courts", "/courts/{id}", "/courts/search").permitAll()
-                        .requestMatchers("/courts/**").hasAnyRole("ADMIN", "OWNER")
+                        // Courts - PUBLIC READ
+                        .requestMatchers(HttpMethod.GET, "/courts/**").permitAll()
 
-                        // ✅ MoMo webhook endpoint (QUAN TRỌNG!)
+                        // Courts - ADMIN + OWNER WRITE
+                        .requestMatchers(HttpMethod.POST, "/courts").hasAnyRole("ADMIN", "OWNER")
+                        .requestMatchers(HttpMethod.PUT, "/courts/**").hasAnyRole("ADMIN", "OWNER")
+                        .requestMatchers(HttpMethod.DELETE, "/courts/**").hasAnyRole("ADMIN", "OWNER")
+
+                        // Payments
                         .requestMatchers("/payments/momo/webhook").permitAll()
                         .requestMatchers("/payments/mock/**").permitAll()
 
-                        // ✅ Error endpoint
+                        // Error
                         .requestMatchers("/error").permitAll()
 
-                        // ✅ Tất cả request khác cần authentication
+                        // Others
                         .anyRequest().authenticated())
 
                 .authenticationProvider(authenticationProvider())
