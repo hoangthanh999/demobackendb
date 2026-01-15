@@ -57,15 +57,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         String method = request.getMethod();
 
+        log.info("🔵 JWT Filter RUNNING for: {} {}", method, path); // ← THÊM LOG NÀY
+
         try {
             String jwt = getJwtFromRequest(request);
-
-            log.info("🔍 JWT Filter - Path: {} {}, JWT present: {}", method, path, jwt != null);
+            log.info("🔑 JWT present: {}", jwt != null);
 
             if (StringUtils.hasText(jwt)) {
-                log.info("🔑 JWT Token: {}...", jwt.substring(0, Math.min(50, jwt.length())));
+                log.info("📝 JWT: {}...", jwt.substring(0, Math.min(50, jwt.length())));
 
                 if (jwtUtil.validateToken(jwt)) {
+                    log.info("✅ JWT valid");
+
                     String email = jwtUtil.getEmailFromToken(jwt);
                     log.info("📧 Email from token: {}", email);
 
@@ -81,30 +84,37 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                     SecurityContextHolder.getContext().setAuthentication(authentication);
 
-                    log.info("✅ Authentication set successfully for: {}", email);
-                    log.info("✅ Authorities in SecurityContext: {}",
+                    log.info("✅ Authentication set in SecurityContext");
+                    log.info("✅ Current authorities: {}",
                             SecurityContextHolder.getContext().getAuthentication().getAuthorities());
                 } else {
-                    log.warn("❌ JWT validation failed");
+                    log.error("❌ JWT validation FAILED");
                 }
             } else {
-                log.warn("⚠️ No JWT token found in request to: {} {}", method, path);
+                log.error("❌ NO JWT found in request");
             }
         } catch (Exception ex) {
-            log.error("❌ Could not set user authentication in security context", ex);
+            log.error("❌ JWT Filter exception", ex);
         }
 
+        log.info("🔵 Continuing filter chain...");
         filterChain.doFilter(request, response);
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
-        log.debug("📋 Authorization header: {}",
-                bearerToken != null ? bearerToken.substring(0, Math.min(20, bearerToken.length())) + "..." : "NULL");
+
+        log.info("📋 Authorization header: {}",
+                bearerToken != null ? bearerToken.substring(0, Math.min(30, bearerToken.length())) + "..." : "NULL");
 
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
+            String token = bearerToken.substring(7);
+            log.info("✅ Extracted JWT: {}...", token.substring(0, Math.min(30, token.length())));
+            return token;
         }
+
+        log.warn("⚠️ No valid Bearer token found");
         return null;
     }
+
 }
