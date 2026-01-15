@@ -60,28 +60,33 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
 
                 .authorizeHttpRequests(auth -> auth
-                        // Auth
+                        // ✅ Auth endpoints - PUBLIC
                         .requestMatchers("/auth/**").permitAll()
 
-                        // Courts - PUBLIC READ
-                        .requestMatchers(HttpMethod.GET, "/courts/**").permitAll()
+                        // ✅ Courts - PUBLIC READ, AUTHENTICATED WRITE
+                        .requestMatchers(HttpMethod.GET, "/courts", "/courts/**").permitAll()
 
-                        // ✅ SỬA: Dùng hasAuthority thay vì hasRole
+                        // 🔴 KIỂM TRA DÒNG NÀY
                         .requestMatchers(HttpMethod.POST, "/courts")
-                        .hasAnyAuthority("ADMIN", "OWNER") // ← KHÔNG TỰ THÊM ROLE_
-                        .requestMatchers(HttpMethod.PUT, "/courts/**")
-                        .hasAnyAuthority("ADMIN", "OWNER")
-                        .requestMatchers(HttpMethod.DELETE, "/courts/**")
-                        .hasAnyAuthority("ADMIN", "OWNER")
+                        .hasAnyRole("ADMIN", "OWNER") // ← PHẢI LÀ hasAnyRole, KHÔNG PHẢI hasAnyAuthority
 
-                        // Payments
+                        .requestMatchers(HttpMethod.PUT, "/courts/**")
+                        .hasAnyRole("ADMIN", "OWNER")
+
+                        .requestMatchers(HttpMethod.DELETE, "/courts/**")
+                        .hasAnyRole("ADMIN", "OWNER")
+
+                        .requestMatchers(HttpMethod.PATCH, "/courts/**")
+                        .hasAnyRole("ADMIN", "OWNER")
+
+                        // ✅ Payments
                         .requestMatchers("/payments/momo/webhook").permitAll()
                         .requestMatchers("/payments/mock/**").permitAll()
 
-                        // Error
+                        // ✅ Error
                         .requestMatchers("/error").permitAll()
 
-                        // Others
+                        // ✅ All others need auth
                         .anyRequest().authenticated())
 
                 .authenticationProvider(authenticationProvider())
