@@ -1,5 +1,3 @@
-// backend/src/main/java/com/badminton/security/JwtAuthenticationFilter.java
-
 package com.badminton.security;
 
 import jakarta.servlet.FilterChain;
@@ -37,7 +35,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 || path.startsWith("/courts/search")
                 || (path.matches("/courts/\\d+") && method.equals("GET"))
                 || path.equals("/payments/momo/webhook")
-                || path.startsWith("/payments/mock/")
+                || path.startsWith("/payments/mock/") // ← ĐÃ CÓ NHƯNG VẪN BỊ CHẶN
                 || path.equals("/error")
                 || method.equalsIgnoreCase("OPTIONS");
 

@@ -56,42 +56,31 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
 
                 .authorizeHttpRequests(auth -> auth
-                        // ✅ Auth endpoints - PUBLIC
-                        .requestMatchers("/auth/**").permitAll()
+                        // ✅ 1. PUBLIC endpoints TRƯỚC
+                        .requestMatchers(
+                                "/auth/**",
+                                "/payments/momo/webhook",
+                                "/payments/mock/**", // ← QUAN TRỌNG
+                                "/error")
+                        .permitAll()
 
-                        // ✅ Courts - PUBLIC READ, AUTHENTICATED WRITE
-                        .requestMatchers(HttpMethod.GET, "/courts", "/courts/**").permitAll()
+                        // ✅ 2. Courts public read
+                        .requestMatchers(HttpMethod.GET, "/courts/**").permitAll()
 
-                        // 🔴 KIỂM TRA DÒNG NÀY
-                        .requestMatchers(HttpMethod.POST, "/courts")
-                        .hasAnyRole("ADMIN", "OWNER") // ← PHẢI LÀ hasAnyRole, KHÔNG PHẢI hasAnyAuthority
+                        // ✅ 3. Courts authenticated write
+                        .requestMatchers(HttpMethod.POST, "/courts").hasAnyRole("ADMIN", "OWNER")
+                        .requestMatchers(HttpMethod.PUT, "/courts/**").hasAnyRole("ADMIN", "OWNER")
+                        .requestMatchers(HttpMethod.DELETE, "/courts/**").hasAnyRole("ADMIN", "OWNER")
+                        .requestMatchers(HttpMethod.PATCH, "/courts/**").hasAnyRole("ADMIN", "OWNER")
 
-                        .requestMatchers(HttpMethod.PUT, "/courts/**")
-                        .hasAnyRole("ADMIN", "OWNER")
-
-                        .requestMatchers(HttpMethod.DELETE, "/courts/**")
-                        .hasAnyRole("ADMIN", "OWNER")
-
-                        .requestMatchers(HttpMethod.PATCH, "/courts/**")
-                        .hasAnyRole("ADMIN", "OWNER")
-
-                        // ✅ Payments
-                        .requestMatchers("/payments/momo/webhook").permitAll()
-                        .requestMatchers("/payments/mock/**").permitAll()
-
-                        // ✅ Error
-                        .requestMatchers("/error").permitAll()
-
-                        // ✅ All others need auth
+                        // ✅ 4. Everything else needs auth
                         .anyRequest().authenticated())
 
                 .authenticationProvider(authenticationProvider())
-                .addFilterBefore(jwtAuthenticationFilter,
-                        UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
