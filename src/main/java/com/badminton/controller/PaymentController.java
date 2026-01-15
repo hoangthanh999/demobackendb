@@ -36,7 +36,7 @@ public class PaymentController {
     private final PaymentService paymentService;
 
     @PostMapping("/momo/create")
-    @PreAuthorize("hasAnyRole('USER', 'OWNER', 'ADMIN')")
+
     public ResponseEntity<ApiResponse<MoMoPaymentResponse>> createMoMoPayment(
             @Valid @RequestBody PaymentRequest request,
             Authentication authentication) {
@@ -47,7 +47,7 @@ public class PaymentController {
 
     // ✅ THÊM MỚI - Mock payment confirmation
     @PostMapping("/mock/confirm/{orderId}")
-    @PreAuthorize("hasAnyRole('USER', 'OWNER', 'ADMIN')")
+
     public ResponseEntity<ApiResponse<PaymentResponse>> confirmMockPayment(
             @PathVariable String orderId,
             @RequestParam(defaultValue = "0") int resultCode) {
@@ -59,7 +59,6 @@ public class PaymentController {
         webhook.setOrderId(orderId);
         webhook.setResultCode(resultCode);
         webhook.setTransId(System.currentTimeMillis());
-
 
         moMoService.handleWebhook(webhook);
 
