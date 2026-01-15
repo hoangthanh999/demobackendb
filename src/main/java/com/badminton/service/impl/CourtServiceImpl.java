@@ -7,7 +7,10 @@ import com.badminton.entity.User;
 import com.badminton.exception.ResourceNotFoundException;
 import com.badminton.exception.UnauthorizedException;
 import com.badminton.repository.CourtRepository;
+import lombok.extern.slf4j.Slf4j;
+
 import com.badminton.repository.UserRepository;
+import com.badminton.service.CloudinaryService;
 import com.badminton.service.CourtService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,11 +27,13 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@Slf4j
 public class CourtServiceImpl implements CourtService {
 
     private final CourtRepository courtRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+    private final CloudinaryService cloudinaryService;
 
     @Override
     public CourtResponse createCourt(CourtRequest request, Long ownerId) {
@@ -67,38 +72,6 @@ public class CourtServiceImpl implements CourtService {
     }
 
     @Override
-    public CourtResponse updateCourt(Long id, CourtRequest request, Long ownerId) {
-        Court court = courtRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân"));
-
-        if (!court.getOwner().getId().equals(ownerId)) {
-            throw new UnauthorizedException("Bạn không có quyền cập nhật sân này");
-        }
-
-        court.setName(request.getName());
-        court.setAddress(request.getAddress());
-        court.setDescription(request.getDescription());
-        court.setPricePerHour(request.getPricePerHour());
-        court.setNumberOfCourts(request.getNumberOfCourts());
-        court.setOpenTime(request.getOpenTime());
-        court.setCloseTime(request.getCloseTime());
-
-        try {
-            if (request.getFacilities() != null) {
-                court.setFacilities(objectMapper.writeValueAsString(request.getFacilities()));
-            }
-            if (request.getImages() != null) {
-                court.setImages(objectMapper.writeValueAsString(request.getImages()));
-            }
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("Lỗi xử lý dữ liệu", e);
-        }
-
-        Court updatedCourt = courtRepository.save(court);
-        return mapToCourtResponse(updatedCourt);
-    }
-
-    @Override
     public CourtResponse getCourtById(Long id) {
         Court court = courtRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân"));
@@ -127,18 +100,6 @@ public class CourtServiceImpl implements CourtService {
         return courtRepository.findByOwner(owner).stream()
                 .map(this::mapToCourtResponse)
                 .collect(Collectors.toList());
-    }
-
-    @Override
-    public void deleteCourt(Long id, Long ownerId) {
-        Court court = courtRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân"));
-
-        if (!court.getOwner().getId().equals(ownerId)) {
-            throw new UnauthorizedException("Bạn không có quyền xóa sân này");
-        }
-
-        courtRepository.delete(court);
     }
 
     @Override
@@ -183,5 +144,99 @@ public class CourtServiceImpl implements CourtService {
         }
 
         return response;
+    }
+
+    @Override
+    public void deleteCourt(Long id, Long ownerId) {
+        Court court = courtRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân"));
+
+        User user = userRepository.findById(ownerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
+
+        // Check permission
+        boolean isOwner = court.getOwner().getId().equals(ownerId);
+        boolean isAdmin = user.getRole() == User.UserRole.ADMIN;
+
+        if (!isOwner && !isAdmin) {
+            throw new UnauthorizedException("Bạn không có quyền xóa sân này");
+        }
+
+        // ✅ Delete images from Cloudinary before deleting court
+        try {
+            if (court.getImages() != null) {
+                List<String> imageUrls = objectMapper.readValue(court.getImages(), List.class);
+
+                for (String imageUrl : imageUrls) {
+                    String publicId = cloudinaryService.extractPublicId(imageUrl);
+                    if (publicId != null) {
+                        cloudinaryService.deleteImage(publicId);
+                    }
+                }
+            }
+        } catch (JsonProcessingException e) {
+            log.error("Error processing images for deletion", e);
+        }
+
+        courtRepository.delete(court);
+    }
+
+    @Override
+    public CourtResponse updateCourt(Long id, CourtRequest request, Long ownerId) {
+        Court court = courtRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân"));
+
+        User user = userRepository.findById(ownerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
+
+        boolean isOwner = court.getOwner().getId().equals(ownerId);
+        boolean isAdmin = user.getRole() == User.UserRole.ADMIN;
+
+        if (!isOwner && !isAdmin) {
+            throw new UnauthorizedException("Bạn không có quyền cập nhật sân này");
+        }
+
+        // ✅ Delete old images if images are being replaced
+        try {
+            if (request.getImages() != null && court.getImages() != null) {
+                List<String> oldImageUrls = objectMapper.readValue(court.getImages(), List.class);
+                List<String> newImageUrls = request.getImages();
+
+                // Find images that are being removed
+                for (String oldUrl : oldImageUrls) {
+                    if (!newImageUrls.contains(oldUrl)) {
+                        String publicId = cloudinaryService.extractPublicId(oldUrl);
+                        if (publicId != null) {
+                            cloudinaryService.deleteImage(publicId);
+                        }
+                    }
+                }
+            }
+        } catch (JsonProcessingException e) {
+            log.error("Error processing images for update", e);
+        }
+
+        // Update court fields
+        court.setName(request.getName());
+        court.setAddress(request.getAddress());
+        court.setDescription(request.getDescription());
+        court.setPricePerHour(request.getPricePerHour());
+        court.setNumberOfCourts(request.getNumberOfCourts());
+        court.setOpenTime(request.getOpenTime());
+        court.setCloseTime(request.getCloseTime());
+
+        try {
+            if (request.getFacilities() != null) {
+                court.setFacilities(objectMapper.writeValueAsString(request.getFacilities()));
+            }
+            if (request.getImages() != null) {
+                court.setImages(objectMapper.writeValueAsString(request.getImages()));
+            }
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Lỗi xử lý dữ liệu", e);
+        }
+
+        Court updatedCourt = courtRepository.save(court);
+        return mapToCourtResponse(updatedCourt);
     }
 }
