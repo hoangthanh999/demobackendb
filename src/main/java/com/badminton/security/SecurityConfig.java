@@ -66,10 +66,13 @@ public class SecurityConfig {
                         // Courts - PUBLIC READ
                         .requestMatchers(HttpMethod.GET, "/courts/**").permitAll()
 
-                        // Courts - ADMIN + OWNER WRITE
-                        .requestMatchers(HttpMethod.POST, "/courts").hasAnyRole("ADMIN", "OWNER")
-                        .requestMatchers(HttpMethod.PUT, "/courts/**").hasAnyRole("ADMIN", "OWNER")
-                        .requestMatchers(HttpMethod.DELETE, "/courts/**").hasAnyRole("ADMIN", "OWNER")
+                        // ✅ SỬA: Dùng hasAuthority thay vì hasRole
+                        .requestMatchers(HttpMethod.POST, "/courts")
+                        .hasAnyAuthority("ADMIN", "OWNER") // ← KHÔNG TỰ THÊM ROLE_
+                        .requestMatchers(HttpMethod.PUT, "/courts/**")
+                        .hasAnyAuthority("ADMIN", "OWNER")
+                        .requestMatchers(HttpMethod.DELETE, "/courts/**")
+                        .hasAnyAuthority("ADMIN", "OWNER")
 
                         // Payments
                         .requestMatchers("/payments/momo/webhook").permitAll()
