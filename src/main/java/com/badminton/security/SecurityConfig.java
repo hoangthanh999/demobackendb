@@ -64,6 +64,7 @@ public class SecurityConfig {
 
                         // ✅ Courts endpoints (public)
                         .requestMatchers("/courts", "/courts/{id}", "/courts/search").permitAll()
+                        .requestMatchers("/courts/**").hasAnyRole("ADMIN", "OWNER")
 
                         // ✅ MoMo webhook endpoint (QUAN TRỌNG!)
                         .requestMatchers("/payments/momo/webhook").permitAll()
@@ -116,4 +117,3 @@ public class SecurityConfig {
         return source;
     }
 }
-    
