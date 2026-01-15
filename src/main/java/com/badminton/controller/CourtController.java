@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -23,6 +24,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/courts")
 @RequiredArgsConstructor
+@Slf4j
 public class CourtController {
 
     private final CourtService courtService;
@@ -71,7 +73,15 @@ public class CourtController {
     public ResponseEntity<ApiResponse<CourtResponse>> createCourt(
             @Valid @RequestBody CourtRequest request,
             Authentication authentication) {
+
+        log.info("🔵 POST /courts - Creating court");
+        log.info("👤 Authentication: {}", authentication != null ? authentication.getName() : "NULL");
+        log.info("🔐 Authorities: {}", authentication != null ? authentication.getAuthorities() : "NULL");
+        log.info("📋 Request: {}", request);
+
         User user = getUserFromAuth(authentication);
+        log.info("✅ User from auth: id={}, role={}", user.getId(), user.getRole());
+
         CourtResponse court = courtService.createCourt(request, user.getId());
         return ResponseEntity.ok(ApiResponse.success(court, "Tạo sân thành công"));
     }
