@@ -59,24 +59,34 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
 
                 .authorizeHttpRequests(auth -> auth
-                        // ✅ 1. PUBLIC endpoints TRƯỚC
+                        // ✅ Existing public endpoints
                         .requestMatchers(
                                 "/auth/**",
                                 "/payments/momo/webhook",
-                                "/payments/mock/**", // ← QUAN TRỌNG
+                                "/payments/mock/**",
+                                "/shop/payments/momo/webhook",
+                                "/shop/payments/mock/**",
                                 "/error")
                         .permitAll()
 
-                        // ✅ 2. Courts public read
+                        // ✅ Shop public read endpoints
+                        .requestMatchers(HttpMethod.GET,
+                                "/shop/categories/**",
+                                "/shop/products/**",
+                                "/shop/reviews/product/**",
+                                "/shop/reviews/latest-verified")
+                        .permitAll()
+
+                        // ✅ Courts public read
                         .requestMatchers(HttpMethod.GET, "/courts/**").permitAll()
 
-                        // ✅ 3. Courts authenticated write
+                        // ✅ Courts authenticated write
                         .requestMatchers(HttpMethod.POST, "/courts").hasAnyRole("ADMIN", "OWNER")
                         .requestMatchers(HttpMethod.PUT, "/courts/**").hasAnyRole("ADMIN", "OWNER")
                         .requestMatchers(HttpMethod.DELETE, "/courts/**").hasAnyRole("ADMIN", "OWNER")
                         .requestMatchers(HttpMethod.PATCH, "/courts/**").hasAnyRole("ADMIN", "OWNER")
 
-                        // ✅ 4. Everything else needs auth
+                        // ✅ Everything else needs auth
                         .anyRequest().authenticated())
 
                 .authenticationProvider(authenticationProvider())
