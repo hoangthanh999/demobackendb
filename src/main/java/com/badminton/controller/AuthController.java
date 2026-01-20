@@ -14,10 +14,12 @@ import com.badminton.service.AuthService;
 import com.badminton.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j; // ✅ THÊM
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+@Slf4j // ✅ THÊM
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -62,18 +64,31 @@ public class AuthController {
         UserResponse response = userService.updateProfile(user.getId(), request);
         return ResponseEntity.ok(ApiResponse.success(response, "Cập nhật thông tin thành công"));
     }
-    
+
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(
             @Valid @RequestBody ForgotPasswordRequest request) {
-        authService.requestPasswordReset(request.getEmail());
-        return ResponseEntity.ok(ApiResponse.success(null, 
-            "Nếu email tồn tại, link đặt lại mật khẩu đã được gửi"));
+
+        log.info("📧 Forgot password request for email: {}", request.getEmail()); // ✅ THÊM
+
+        try {
+            authService.requestPasswordReset(request.getEmail());
+            return ResponseEntity.ok(ApiResponse.success(null,
+                    "Nếu email tồn tại, link đặt lại mật khẩu đã được gửi"));
+        } catch (Exception e) {
+            log.error("❌ Error in forgot password: ", e); // ✅ THÊM
+            // Vẫn trả về success để tránh enumerate user
+            return ResponseEntity.ok(ApiResponse.success(null,
+                    "Nếu email tồn tại, link đặt lại mật khẩu đã được gửi"));
+        }
     }
-    
+
     @PostMapping("/reset-password")
     public ResponseEntity<ApiResponse<Void>> resetPassword(
             @Valid @RequestBody ResetPasswordRequest request) {
+
+        log.info("🔐 Reset password request with token"); // ✅ THÊM
+
         authService.resetPassword(request.getToken(), request.getNewPassword());
         return ResponseEntity.ok(ApiResponse.success(null, "Đặt lại mật khẩu thành công"));
     }

@@ -13,6 +13,7 @@ import com.badminton.service.EmailService;
 import com.badminton.entity.PasswordResetToken;
 import com.badminton.repository.PasswordResetTokenRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j; // ✅ THÊM
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -20,6 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j // ✅ THÊM
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -95,20 +97,25 @@ public class AuthServiceImpl implements AuthService {
                 .createdAt(user.getCreatedAt())
                 .build();
     }
-    
+
     @Override
     public void requestPasswordReset(String email) {
+        log.info("🔍 Looking for user with email: {}", email); // ✅ THÊM
+
         // Tìm user - không throw exception để tránh enumerate user
         User user = userRepository.findByEmail(email).orElse(null);
-        
+
         if (user == null) {
+            log.warn("⚠️ User not found for email: {}", email); // ✅ THÊM
             // Không báo lỗi để tránh tiết lộ email có tồn tại hay không
             return;
         }
-        
+
+        log.info("✅ User found: {}", user.getEmail()); // ✅ THÊM
+
         // Xóa các token cũ của user này
         tokenRepository.deleteByUser(user);
-        
+
         // Tạo token mới
         String token = java.util.UUID.randomUUID().toString();
         PasswordResetToken resetToken = new PasswordResetToken();
@@ -116,33 +123,48 @@ public class AuthServiceImpl implements AuthService {
         resetToken.setUser(user);
         resetToken.setExpiryDate(java.time.LocalDateTime.now().plusHours(1));
         resetToken.setUsed(false);
-        
+
         tokenRepository.save(resetToken);
-        
+        log.info("💾 Token saved: {}", token); // ✅ THÊM
+
         // Gửi email
-        emailService.sendPasswordResetEmail(user.getEmail(), token);
+        try {
+            emailService.sendPasswordResetEmail(user.getEmail(), token);
+            log.info("📧 Email sent successfully to: {}", user.getEmail()); // ✅ THÊM
+        } catch (Exception e) {
+            log.error("❌ Failed to send email: ", e); // ✅ THÊM
+            throw new RuntimeException("Không thể gửi email");
+        }
     }
-    
+
     @Override
     public void resetPassword(String token, String newPassword) {
+        log.info("🔍 Looking for token: {}", token); // ✅ THÊM
+
         PasswordResetToken resetToken = tokenRepository.findByToken(token)
-            .orElseThrow(() -> new BadRequestException("Token không hợp lệ"));
-        
+                .orElseThrow(() -> new BadRequestException("Token không hợp lệ"));
+
+        log.info("✅ Token found for user: {}", resetToken.getUser().getEmail()); // ✅ THÊM
+
         if (resetToken.getUsed()) {
+            log.warn("⚠️ Token already used"); // ✅ THÊM
             throw new BadRequestException("Token đã được sử dụng");
         }
-        
+
         if (resetToken.isExpired()) {
+            log.warn("⚠️ Token expired"); // ✅ THÊM
             throw new BadRequestException("Token đã hết hạn");
         }
-        
+
         // Cập nhật mật khẩu
         User user = resetToken.getUser();
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
-        
+
         // Đánh dấu token đã sử dụng
         resetToken.setUsed(true);
         tokenRepository.save(resetToken);
+
+        log.info("✅ Password reset successfully for user: {}", user.getEmail()); // ✅ THÊM
     }
 }
