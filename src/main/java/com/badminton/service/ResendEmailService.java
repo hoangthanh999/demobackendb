@@ -70,142 +70,161 @@ public class ResendEmailService {
     }
 
     private String buildResetEmailHtml(String token) {
-        return """
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <style>
-                        body {
-                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                            line-height: 1.6;
-                            color: #333;
-                            margin: 0;
-                            padding: 0;
-                            background-color: #f5f5f5;
-                        }
-                        .container {
-                            max-width: 600px;
-                            margin: 40px auto;
-                            background: white;
-                            border-radius: 12px;
-                            overflow: hidden;
-                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                        }
-                        .header {
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            color: white;
-                            padding: 40px 30px;
-                            text-align: center;
-                        }
-                        .header h1 {
-                            margin: 0 0 10px 0;
-                            font-size: 28px;
-                            font-weight: 600;
-                        }
-                        .header p {
-                            margin: 0;
-                            font-size: 16px;
-                            opacity: 0.9;
-                        }
-                        .content {
-                            padding: 40px 30px;
-                        }
-                        .content p {
-                            margin: 0 0 15px 0;
-                            font-size: 16px;
-                            line-height: 1.6;
-                        }
-                        .token-box {
-                            background: #f8f9fa;
-                            border: 2px dashed #667eea;
-                            border-radius: 8px;
-                            padding: 20px;
-                            margin: 25px 0;
-                            text-align: center;
-                        }
-                        .token {
-                            font-family: 'Courier New', monospace;
-                            font-size: 24px;
-                            font-weight: bold;
-                            color: #667eea;
-                            letter-spacing: 2px;
-                            word-break: break-all;
-                        }
-                        .warning {
-                            background: #fff3cd;
-                            border-left: 4px solid #ffc107;
-                            padding: 15px;
-                            margin: 20px 0;
-                            border-radius: 4px;
-                        }
-                        .warning p {
-                            margin: 0;
-                            color: #856404;
-                            font-weight: 500;
-                        }
-                        .footer {
-                            background: #f8f9fa;
-                            padding: 30px;
-                            text-align: center;
-                            color: #6c757d;
-                            font-size: 14px;
-                            border-top: 1px solid #e9ecef;
-                        }
-                        .footer p {
-                            margin: 5px 0;
-                        }
-                        .instructions {
-                            background: #e7f3ff;
-                            border-left: 4px solid #2196F3;
-                            padding: 15px;
-                            margin: 20px 0;
-                            border-radius: 4px;
-                        }
-                        .instructions p {
-                            margin: 5px 0;
-                            color: #0d47a1;
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="container">
-                        <div class="header">
-                            <h1>🏸 Badminton Court Management</h1>
-                            <p>Yêu cầu đặt lại mật khẩu</p>
-                        </div>
-                        <div class="content">
-                            <p>Xin chào,</p>
-                            <p>Chúng tôi đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.</p>
-
-                            <div class="instructions">
-                                <p><strong>📱 Hướng dẫn:</strong></p>
-                                <p>Sao chép mã token bên dưới và nhập vào ứng dụng để đặt lại mật khẩu.</p>
-                            </div>
-
-                            <div class="token-box">
-                                <div class="token">%s</div>
-                            </div>
-
-                            <div class="warning">
-                                <p>⚠️ Mã này chỉ có hiệu lực trong <strong>1 giờ</strong>.</p>
-                            </div>
-
-                            <p>Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.
-                               Mật khẩu của bạn sẽ không bị thay đổi.</p>
-                        </div>
-                        <div class="footer">
-                            <p><strong>© 2024 Badminton Court Management</strong></p>
-                            <p>All rights reserved.</p>
-                            <p style="margin-top: 15px; font-size: 12px;">
-                                Email này được gửi tự động, vui lòng không trả lời.
-                            </p>
-                        </div>
-                    </div>
-                </body>
-                </html>
+        // ✅ SỬA: Dùng String.format thay vì .formatted()
+        return String.format(
                 """
-                .formatted(token);
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <style>
+                                body {
+                                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                                    line-height: 1.6;
+                                    color: %1$s;
+                                    margin: 0;
+                                    padding: 0;
+                                    background-color: %2$s;
+                                }
+                                .container {
+                                    max-width: 600px;
+                                    margin: 40px auto;
+                                    background: white;
+                                    border-radius: 12px;
+                                    overflow: hidden;
+                                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                                }
+                                .header {
+                                    background: linear-gradient(135deg, %3$s 0%%, %4$s 100%%);
+                                    color: white;
+                                    padding: 40px 30px;
+                                    text-align: center;
+                                }
+                                .header h1 {
+                                    margin: 0 0 10px 0;
+                                    font-size: 28px;
+                                    font-weight: 600;
+                                }
+                                .header p {
+                                    margin: 0;
+                                    font-size: 16px;
+                                    opacity: 0.9;
+                                }
+                                .content {
+                                    padding: 40px 30px;
+                                }
+                                .content p {
+                                    margin: 0 0 15px 0;
+                                    font-size: 16px;
+                                    line-height: 1.6;
+                                }
+                                .token-box {
+                                    background: %5$s;
+                                    border: 2px dashed %6$s;
+                                    border-radius: 8px;
+                                    padding: 20px;
+                                    margin: 25px 0;
+                                    text-align: center;
+                                }
+                                .token {
+                                    font-family: 'Courier New', monospace;
+                                    font-size: 24px;
+                                    font-weight: bold;
+                                    color: %7$s;
+                                    letter-spacing: 2px;
+                                    word-break: break-all;
+                                }
+                                .warning {
+                                    background: %8$s;
+                                    border-left: 4px solid %9$s;
+                                    padding: 15px;
+                                    margin: 20px 0;
+                                    border-radius: 4px;
+                                }
+                                .warning p {
+                                    margin: 0;
+                                    color: %10$s;
+                                    font-weight: 500;
+                                }
+                                .footer {
+                                    background: %11$s;
+                                    padding: 30px;
+                                    text-align: center;
+                                    color: %12$s;
+                                    font-size: 14px;
+                                    border-top: 1px solid %13$s;
+                                }
+                                .footer p {
+                                    margin: 5px 0;
+                                }
+                                .instructions {
+                                    background: %14$s;
+                                    border-left: 4px solid %15$s;
+                                    padding: 15px;
+                                    margin: 20px 0;
+                                    border-radius: 4px;
+                                }
+                                .instructions p {
+                                    margin: 5px 0;
+                                    color: %16$s;
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="container">
+                                <div class="header">
+                                    <h1>🏸 Badminton Court Management</h1>
+                                    <p>Yêu cầu đặt lại mật khẩu</p>
+                                </div>
+                                <div class="content">
+                                    <p>Xin chào,</p>
+                                    <p>Chúng tôi đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.</p>
+
+                                    <div class="instructions">
+                                        <p><strong>📱 Hướng dẫn:</strong></p>
+                                        <p>Sao chép mã token bên dưới và nhập vào ứng dụng để đặt lại mật khẩu.</p>
+                                    </div>
+
+                                    <div class="token-box">
+                                        <div class="token">%17$s</div>
+                                    </div>
+
+                                    <div class="warning">
+                                        <p>⚠️ Mã này chỉ có hiệu lực trong <strong>1 giờ</strong>.</p>
+                                    </div>
+
+                                    <p>Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.
+                                       Mật khẩu của bạn sẽ không bị thay đổi.</p>
+                                </div>
+                                <div class="footer">
+                                    <p><strong>© 2024 Badminton Court Management</strong></p>
+                                    <p>All rights reserved.</p>
+                                    <p style="margin-top: 15px; font-size: 12px;">
+                                        Email này được gửi tự động, vui lòng không trả lời.
+                                    </p>
+                                </div>
+                            </div>
+                        </body>
+                        </html>
+                        """,
+                "#333", // 1 - body color
+                "#f5f5f5", // 2 - body background
+                "#667eea", // 3 - header gradient start
+                "#764ba2", // 4 - header gradient end
+                "#f8f9fa", // 5 - token box background
+                "#667eea", // 6 - token box border
+                "#667eea", // 7 - token color
+                "#fff3cd", // 8 - warning background
+                "#ffc107", // 9 - warning border
+                "#856404", // 10 - warning text color
+                "#f8f9fa", // 11 - footer background
+                "#6c757d", // 12 - footer text color
+                "#e9ecef", // 13 - footer border
+                "#e7f3ff", // 14 - instructions background
+                "#2196F3", // 15 - instructions border
+                "#0d47a1", // 16 - instructions text color
+                token // 17 - TOKEN VALUE
+        );
     }
 }
