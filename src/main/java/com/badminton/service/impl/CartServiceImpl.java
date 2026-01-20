@@ -30,7 +30,6 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
 @Slf4j
 public class CartServiceImpl implements CartService {
 
@@ -41,15 +40,17 @@ public class CartServiceImpl implements CartService {
     private final ObjectMapper objectMapper;
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional // ✅ BỎ readOnly = true
     public CartResponse getCart(Long userId) {
+        log.info("🛒 Getting cart for user: {}", userId);
         Cart cart = getOrCreateCart(userId);
         return mapToCartResponse(cart);
     }
 
     @Override
+    @Transactional // ✅ ĐÃ ĐÚNG
     public CartResponse addToCart(Long userId, AddToCartRequest request) {
-        log.info("Adding product {} to cart for user {}", request.getProductId(), userId);
+        log.info("➕ Adding product {} to cart for user {}", request.getProductId(), userId);
 
         // Get or create cart
         Cart cart = getOrCreateCart(userId);
@@ -84,7 +85,7 @@ public class CartServiceImpl implements CartService {
 
             existingItem.setQuantity(newQuantity);
             cartItemRepository.save(existingItem);
-            log.info("Updated cart item quantity to {}", newQuantity);
+            log.info("✅ Updated cart item quantity to {}", newQuantity);
         } else {
             // Add new item
             CartItem cartItem = new CartItem();
@@ -95,15 +96,16 @@ public class CartServiceImpl implements CartService {
 
             cart.getItems().add(cartItem);
             cartItemRepository.save(cartItem);
-            log.info("Added new item to cart");
+            log.info("✅ Added new item to cart");
         }
 
         return mapToCartResponse(cart);
     }
 
     @Override
+    @Transactional // ✅ ĐÃ ĐÚNG
     public CartResponse updateCartItem(Long userId, Long cartItemId, UpdateCartItemRequest request) {
-        log.info("Updating cart item {} for user {}", cartItemId, userId);
+        log.info("🔄 Updating cart item {} for user {}", cartItemId, userId);
 
         Cart cart = getOrCreateCart(userId);
 
@@ -126,13 +128,14 @@ public class CartServiceImpl implements CartService {
         cartItem.setPrice(product.getPrice()); // Update price in case it changed
         cartItemRepository.save(cartItem);
 
-        log.info("Cart item updated successfully");
+        log.info("✅ Cart item updated successfully");
         return mapToCartResponse(cart);
     }
 
     @Override
+    @Transactional // ✅ ĐÃ ĐÚNG
     public CartResponse removeCartItem(Long userId, Long cartItemId) {
-        log.info("Removing cart item {} for user {}", cartItemId, userId);
+        log.info("🗑️ Removing cart item {} for user {}", cartItemId, userId);
 
         Cart cart = getOrCreateCart(userId);
 
@@ -147,13 +150,14 @@ public class CartServiceImpl implements CartService {
         cart.getItems().remove(cartItem);
         cartItemRepository.delete(cartItem);
 
-        log.info("Cart item removed successfully");
+        log.info("✅ Cart item removed successfully");
         return mapToCartResponse(cart);
     }
 
     @Override
+    @Transactional // ✅ ĐÃ ĐÚNG
     public void clearCart(Long userId) {
-        log.info("Clearing cart for user {}", userId);
+        log.info("🧹 Clearing cart for user {}", userId);
 
         Cart cart = cartRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giỏ hàng"));
@@ -161,24 +165,28 @@ public class CartServiceImpl implements CartService {
         cartItemRepository.deleteAllByCartId(cart.getId());
         cart.getItems().clear();
 
-        log.info("Cart cleared successfully");
+        log.info("✅ Cart cleared successfully");
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true) // ✅ Method này CHỈ ĐỌC nên OK
     public Integer getCartItemCount(Long userId) {
         return cartRepository.countItemsByUserId(userId);
     }
 
+    // ✅ Method này CÓ THỂ INSERT → Không được gọi từ readOnly transaction
     private Cart getOrCreateCart(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
 
         return cartRepository.findByUser(user)
                 .orElseGet(() -> {
+                    log.info("📦 Creating new cart for user: {}", userId);
                     Cart newCart = new Cart();
                     newCart.setUser(user);
-                    return cartRepository.save(newCart);
+                    Cart savedCart = cartRepository.save(newCart);
+                    log.info("✅ New cart created with ID: {}", savedCart.getId());
+                    return savedCart;
                 });
     }
 
@@ -219,7 +227,7 @@ public class CartServiceImpl implements CartService {
                 }
             }
         } catch (JsonProcessingException e) {
-            log.error("Error processing product images", e);
+            log.error("❌ Error processing product images", e);
         }
 
         BigDecimal subtotal = item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
