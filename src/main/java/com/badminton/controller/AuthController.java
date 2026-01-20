@@ -6,6 +6,8 @@ import com.badminton.dto.request.UpdateProfileRequest;
 import com.badminton.dto.response.ApiResponse;
 import com.badminton.dto.response.AuthResponse;
 import com.badminton.dto.response.UserResponse;
+import com.badminton.dto.request.ForgotPasswordRequest;
+import com.badminton.dto.request.ResetPasswordRequest;
 import com.badminton.entity.User;
 import com.badminton.repository.UserRepository;
 import com.badminton.service.AuthService;
@@ -59,5 +61,20 @@ public class AuthController {
 
         UserResponse response = userService.updateProfile(user.getId(), request);
         return ResponseEntity.ok(ApiResponse.success(response, "Cập nhật thông tin thành công"));
+    }
+    
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        authService.requestPasswordReset(request.getEmail());
+        return ResponseEntity.ok(ApiResponse.success(null, 
+            "Nếu email tồn tại, link đặt lại mật khẩu đã được gửi"));
+    }
+    
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request.getToken(), request.getNewPassword());
+        return ResponseEntity.ok(ApiResponse.success(null, "Đặt lại mật khẩu thành công"));
     }
 }
