@@ -2,6 +2,7 @@ package com.badminton.service;
 
 import com.badminton.dto.request.UpdateProfileRequest;
 import com.badminton.dto.response.UserResponse;
+import com.badminton.dto.request.ChangePasswordRequest;
 import com.badminton.entity.User;
 
 import java.util.List;
@@ -18,4 +19,6 @@ public interface UserService {
     User findByEmail(String email);
 
     User findByPhone(String phone);
+
+    void changePassword(Long userId, ChangePasswordRequest request);
 }

@@ -4,21 +4,30 @@ import com.badminton.dto.request.UpdateProfileRequest;
 import com.badminton.dto.response.UserResponse;
 import com.badminton.entity.User;
 import com.badminton.exception.ResourceNotFoundException;
+
+import com.badminton.dto.request.ChangePasswordRequest;
 import com.badminton.repository.UserRepository;
 import com.badminton.service.UserService;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.badminton.exception.BadRequestException;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public UserResponse getUserById(Long id) {
@@ -82,5 +91,31 @@ public class UserServiceImpl implements UserService {
                 .active(user.getActive())
                 .createdAt(user.getCreatedAt())
                 .build();
+    }
+
+    @Override
+    public void changePassword(Long userId, ChangePasswordRequest request) {
+        log.info("🔐 Changing password for user ID: {}", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BadRequestException("Người dùng không tồn tại"));
+
+        // Kiểm tra mật khẩu cũ
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+            log.warn("⚠️ Old password incorrect for user: {}", user.getEmail());
+            throw new BadRequestException("Mật khẩu cũ không chính xác");
+        }
+
+        // Kiểm tra mật khẩu mới không trùng mật khẩu cũ
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            log.warn("⚠️ New password same as old password for user: {}", user.getEmail());
+            throw new BadRequestException("Mật khẩu mới không được trùng với mật khẩu cũ");
+        }
+
+        // Cập nhật mật khẩu mới
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        log.info("✅ Password changed successfully for user: {}", user.getEmail());
     }
 }
