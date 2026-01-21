@@ -9,7 +9,7 @@ import com.badminton.exception.BadRequestException;
 import com.badminton.repository.UserRepository;
 import com.badminton.security.JwtUtil;
 import com.badminton.service.AuthService;
-import com.badminton.service.ResendEmailService;
+import com.badminton.service.MailjetEmailService;
 import com.badminton.entity.PasswordResetToken;
 import com.badminton.repository.PasswordResetTokenRepository;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +31,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
-    private final ResendEmailService emailService; // ✅ THAY ĐỔI
+    private final MailjetEmailService emailService; // ✅ THAY ĐỔI
     private final PasswordResetTokenRepository tokenRepository;
 
     @Override
