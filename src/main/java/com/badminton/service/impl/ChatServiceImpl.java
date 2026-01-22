@@ -1,26 +1,19 @@
-// backend/src/main/java/com/badminton/service/impl/ChatServiceImpl.java
 package com.badminton.service.impl;
 
+import com.badminton.dto.request.AddToCartRequest; // ✅ THÊM
 import com.badminton.dto.request.ChatRequest;
-import com.badminton.dto.response.ChatResponse;
-import com.badminton.dto.response.CourtResponse;
-import com.badminton.dto.response.ProductResponse;
-import com.badminton.entity.ChatMessage;
-import com.badminton.entity.ChatSession;
-import com.badminton.entity.User;
+import com.badminton.dto.request.CreateOrderRequest; // ✅ THÊM (thay OrderRequest)
+import com.badminton.dto.response.*;
+import com.badminton.entity.*;
 import com.badminton.exception.ResourceNotFoundException;
-import com.badminton.repository.ChatMessageRepository;
-import com.badminton.repository.ChatSessionRepository;
-import com.badminton.repository.UserRepository;
+import com.badminton.repository.*;
 import com.badminton.service.*;
+import com.fasterxml.jackson.core.type.TypeReference; // ✅ THÊM
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,7 +35,9 @@ public class ChatServiceImpl implements ChatService {
     private final LocationService locationService;
     private final ProductService productService;
     private final UserTierService userTierService;
-    private final CourtService courtService; // ✅ ADDED
+    private final CourtService courtService;
+    private final CartService cartService;
+    private final OrderService orderService;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -68,6 +63,11 @@ public class ChatServiceImpl implements ChatService {
                 updateLocationFromRequest(user, request);
             }
 
+            // ✅ KIỂM TRA XEM CÓ PHẢI ACTION KHÔNG
+            if (request.getMessage().startsWith("ACTION:")) {
+                return handleAction(user, request, session);
+            }
+
             // Analyze intent
             MessageIntent intent = analyzeIntent(request.getMessage(), user);
 
@@ -78,6 +78,7 @@ public class ChatServiceImpl implements ChatService {
                 case PRODUCT_SEARCH -> handleProductSearch(user, intent, session);
                 case PRODUCT_ORDER -> handleProductOrder(user, intent, session);
                 case TIER_INFO -> handleTierInfo(user, session);
+                case VIEW_CART -> handleViewCart(user, session); // ✅ THÊM
                 case GENERAL -> handleGeneralChat(user, request.getMessage(), session);
                 default -> buildErrorResponse("Xin lỗi, tôi chưa hiểu yêu cầu của bạn. Bạn có thể nói rõ hơn không?");
             };
@@ -90,13 +91,470 @@ public class ChatServiceImpl implements ChatService {
 
             return response;
 
-        } catch (ResourceNotFoundException e) {
-            log.error("❌ Resource not found: {}", e.getMessage());
-            return buildErrorResponse("Không tìm thấy thông tin. Vui lòng thử lại.");
-
         } catch (Exception e) {
             log.error("❌ Unexpected error processing chat message", e);
             return buildErrorResponse("Đã có lỗi xảy ra. Vui lòng thử lại sau.");
+        }
+    }
+
+    // ✅ THÊM: Xử lý actions từ quick buttons
+    private ChatResponse handleAction(User user, ChatRequest request, ChatSession session) {
+        try {
+            String actionData = request.getMessage().substring(7); // Remove "ACTION:"
+            Map<String, Object> params = objectMapper.readValue(actionData,
+                    new TypeReference<Map<String, Object>>() {
+                    });
+
+            String action = (String) params.get("action");
+
+            return switch (action) {
+                case "ADD_TO_CART" -> handleAddToCart(user, params, session);
+                case "BUY_NOW" -> handleBuyNow(user, params, session);
+                case "VIEW_CART" -> handleViewCart(user, session);
+                case "REMOVE_FROM_CART" -> handleRemoveFromCart(user, params, session);
+                case "CHECKOUT" -> handleCheckout(user, params, session);
+                case "VIEW_PRODUCT_DETAIL" -> handleViewProductDetail(user, params, session);
+                case "BOOK_COURT" -> handleBookCourtAction(user, params, session);
+                default -> buildErrorResponse("Action không hợp lệ");
+            };
+
+        } catch (Exception e) {
+            log.error("❌ Error handling action", e);
+            return buildErrorResponse("Không thể xử lý yêu cầu. Vui lòng thử lại.");
+        }
+    }
+
+    private ChatResponse handleAddToCart(User user, Map<String, Object> params, ChatSession session) {
+        try {
+            Long productId = Long.valueOf(params.get("productId").toString());
+            Integer quantity = params.containsKey("quantity")
+                    ? Integer.valueOf(params.get("quantity").toString())
+                    : 1;
+
+            // ✅ SỬA: Tạo AddToCartRequest
+            AddToCartRequest cartRequest = new AddToCartRequest();
+            cartRequest.setProductId(productId);
+            cartRequest.setQuantity(quantity);
+
+            // Add to cart
+            cartService.addToCart(user.getId(), cartRequest);
+
+            // Get product info
+            ProductDetailResponse product = productService.getProductById(productId);
+
+            String aiResponse = String.format(
+                    "✅ Đã thêm %dx %s vào giỏ hàng!\n\n" +
+                            "Giá: %,dđ\n" +
+                            "Tổng: %,dđ",
+                    quantity,
+                    product.getName(),
+                    product.getPrice().longValue(),
+                    product.getPrice().longValue() * quantity);
+
+            List<ChatResponse.QuickAction> quickActions = List.of(
+                    ChatResponse.QuickAction.builder()
+                            .label("🛒 Xem giỏ hàng")
+                            .action("VIEW_CART")
+                            .params(new HashMap<>())
+                            .build(),
+                    ChatResponse.QuickAction.builder()
+                            .label("💳 Thanh toán ngay")
+                            .action("CHECKOUT")
+                            .params(new HashMap<>())
+                            .build(),
+                    ChatResponse.QuickAction.builder()
+                            .label("🛍️ Tiếp tục mua sắm")
+                            .action("SEARCH_PRODUCTS")
+                            .params(new HashMap<>())
+                            .build());
+
+            return ChatResponse.builder()
+                    .aiResponse(aiResponse)
+                    .messageType(ChatResponse.MessageType.TEXT)
+                    .quickActions(quickActions)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("❌ Error adding to cart", e);
+            return buildErrorResponse("Không thể thêm sản phẩm vào giỏ hàng. Vui lòng thử lại.");
+        }
+    }
+
+    // ✅ SỬA: handleBuyNow - Dùng AddToCartRequest
+    private ChatResponse handleBuyNow(User user, Map<String, Object> params, ChatSession session) {
+        try {
+            Long productId = Long.valueOf(params.get("productId").toString());
+            Integer quantity = params.containsKey("quantity")
+                    ? Integer.valueOf(params.get("quantity").toString())
+                    : 1;
+
+            // ✅ SỬA: Tạo AddToCartRequest
+            AddToCartRequest cartRequest = new AddToCartRequest();
+            cartRequest.setProductId(productId);
+            cartRequest.setQuantity(quantity);
+
+            // Add to cart
+            cartService.addToCart(user.getId(), cartRequest);
+
+            // Get product info
+            ProductDetailResponse product = productService.getProductById(productId);
+
+            String aiResponse = String.format(
+                    "🛍️ Mua ngay: %s\n\n" +
+                            "Số lượng: %d\n" +
+                            "Đơn giá: %,dđ\n" +
+                            "Tổng tiền: %,dđ\n\n" +
+                            "Bạn muốn thanh toán như thế nào?",
+                    product.getName(),
+                    quantity,
+                    product.getPrice().longValue(),
+                    product.getPrice().longValue() * quantity);
+
+            List<ChatResponse.QuickAction> quickActions = List.of(
+                    ChatResponse.QuickAction.builder()
+                            .label("💳 Thanh toán online")
+                            .action("CHECKOUT")
+                            .params(Map.of(
+                                    "paymentMethod", "ONLINE",
+                                    "productId", productId,
+                                    "quantity", quantity))
+                            .build(),
+                    ChatResponse.QuickAction.builder()
+                            .label("💵 Thanh toán COD")
+                            .action("CHECKOUT")
+                            .params(Map.of(
+                                    "paymentMethod", "COD",
+                                    "productId", productId,
+                                    "quantity", quantity))
+                            .build(),
+                    ChatResponse.QuickAction.builder()
+                            .label("🛒 Thêm vào giỏ hàng")
+                            .action("ADD_TO_CART")
+                            .params(Map.of("productId", productId, "quantity", quantity))
+                            .build());
+
+            return ChatResponse.builder()
+                    .aiResponse(aiResponse)
+                    .messageType(ChatResponse.MessageType.ORDER_CONFIRM)
+                    .quickActions(quickActions)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("❌ Error in buy now", e);
+            return buildErrorResponse("Không thể xử lý mua hàng. Vui lòng thử lại.");
+        }
+    }
+
+    private ChatResponse handleRemoveFromCart(User user, Map<String, Object> params, ChatSession session) {
+        try {
+            Long cartItemId = Long.valueOf(params.get("cartItemId").toString());
+
+            // ✅ SỬA: removeItem() → removeCartItem()
+            cartService.removeCartItem(user.getId(), cartItemId);
+
+            return ChatResponse.builder()
+                    .aiResponse("✅ Đã xóa sản phẩm khỏi giỏ hàng!")
+                    .messageType(ChatResponse.MessageType.TEXT)
+                    .quickActions(List.of(
+                            ChatResponse.QuickAction.builder()
+                                    .label("🛒 Xem giỏ hàng")
+                                    .action("VIEW_CART")
+                                    .params(new HashMap<>())
+                                    .build(),
+                            ChatResponse.QuickAction.builder()
+                                    .label("🛍️ Tiếp tục mua")
+                                    .action("SEARCH_PRODUCTS")
+                                    .params(new HashMap<>())
+                                    .build()))
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("❌ Error removing from cart", e);
+            return buildErrorResponse("Không thể xóa sản phẩm. Vui lòng thử lại.");
+        }
+    }
+
+    // ✅ SỬA: handleCheckout - Dùng CreateOrderRequest và user.getPhone()
+    private ChatResponse handleCheckout(User user, Map<String, Object> params, ChatSession session) {
+        try {
+            String paymentMethod = params.containsKey("paymentMethod")
+                    ? (String) params.get("paymentMethod")
+                    : "ONLINE";
+
+            // Get cart
+            CartResponse cart = cartService.getCart(user.getId());
+
+            if (cart.getItems().isEmpty()) {
+                return buildErrorResponse("Giỏ hàng trống. Vui lòng thêm sản phẩm trước.");
+            }
+
+            // ✅ SỬA: Dùng CreateOrderRequest
+            CreateOrderRequest orderRequest = new CreateOrderRequest();
+            orderRequest.setRecipientName(user.getFullName());
+            orderRequest.setRecipientPhone(user.getPhone()); // ✅ SỬA: getPhone()
+            orderRequest.setShippingAddress(user.getAddress());
+            orderRequest.setShippingProvince(user.getProvince());
+            orderRequest.setShippingDistrict(user.getDistrict());
+            orderRequest.setShippingWard(user.getWard());
+            orderRequest.setNote("Đặt hàng từ chat");
+
+            // ✅ SỬA: Tạo order items từ cart
+            List<CreateOrderRequest.OrderItemRequest> items = cart.getItems().stream()
+                    .map(item -> {
+                        CreateOrderRequest.OrderItemRequest orderItem = new CreateOrderRequest.OrderItemRequest();
+                        orderItem.setProductId(item.getProductId());
+                        orderItem.setQuantity(item.getQuantity());
+                        return orderItem;
+                    })
+                    .collect(Collectors.toList());
+            orderRequest.setItems(items);
+
+            // ✅ SỬA: Set payment method
+            orderRequest.setPaymentMethod(CreateOrderRequest.PaymentMethod.valueOf(paymentMethod));
+
+            OrderResponse order = orderService.createOrder(user.getId(), orderRequest);
+
+            String aiResponse = String.format(
+                    "✅ Đơn hàng #%s đã được tạo!\n\n" +
+                            "Tổng tiền: %,dđ\n" +
+                            "Phương thức: %s\n" +
+                            "Địa chỉ: %s\n\n" +
+                            "%s",
+                    order.getOrderNumber(),
+                    order.getTotalAmount().longValue(),
+                    paymentMethod.equals("ONLINE") ? "Thanh toán online" : "COD",
+                    order.getShippingAddress(),
+                    paymentMethod.equals("ONLINE")
+                            ? "Vui lòng thanh toán để hoàn tất đơn hàng."
+                            : "Đơn hàng sẽ được giao trong 2-3 ngày.");
+
+            List<ChatResponse.QuickAction> quickActions = new ArrayList<>();
+
+            if (paymentMethod.equals("ONLINE")) {
+                quickActions.add(ChatResponse.QuickAction.builder()
+                        .label("💳 Thanh toán ngay")
+                        .action("GENERATE_QR")
+                        .params(Map.of("orderId", order.getId()))
+                        .build());
+            }
+
+            quickActions.add(ChatResponse.QuickAction.builder()
+                    .label("📦 Xem đơn hàng")
+                    .action("VIEW_ORDER")
+                    .params(Map.of("orderId", order.getId()))
+                    .build());
+
+            quickActions.add(ChatResponse.QuickAction.builder()
+                    .label("🛍️ Tiếp tục mua")
+                    .action("SEARCH_PRODUCTS")
+                    .params(new HashMap<>())
+                    .build());
+
+            Map<String, Object> actionData = new HashMap<>();
+            actionData.put("order", order);
+
+            return ChatResponse.builder()
+                    .aiResponse(aiResponse)
+                    .messageType(ChatResponse.MessageType.ORDER_CONFIRM)
+                    .actionData(actionData)
+                    .quickActions(quickActions)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("❌ Error in checkout", e);
+            return buildErrorResponse("Không thể tạo đơn hàng. Vui lòng thử lại.");
+        }
+    }
+
+    // ✅ THÊM: handleBookCourtAction
+    private ChatResponse handleBookCourtAction(User user, Map<String, Object> params, ChatSession session) {
+        try {
+            Long courtId = Long.valueOf(params.get("courtId").toString());
+            CourtResponse court = courtService.getCourtById(courtId);
+
+            String aiResponse = String.format(
+                    "🏸 Đặt sân: %s\n\n" +
+                            "📍 Địa chỉ: %s\n" +
+                            "💰 Giá: %,dđ/giờ\n" +
+                            "⏰ Giờ mở cửa: %s - %s\n\n" +
+                            "Bạn muốn đặt sân vào ngày nào?",
+                    court.getName(),
+                    court.getAddress(),
+                    court.getPricePerHour().longValue(),
+                    court.getOpenTime() != null ? court.getOpenTime().toString() : "N/A",
+                    court.getCloseTime() != null ? court.getCloseTime().toString() : "N/A");
+
+            List<ChatResponse.QuickAction> quickActions = List.of(
+                    ChatResponse.QuickAction.builder()
+                            .label("📅 Đặt hôm nay")
+                            .action("BOOK_COURT_TODAY")
+                            .params(Map.of("courtId", courtId))
+                            .build(),
+                    ChatResponse.QuickAction.builder()
+                            .label("📅 Đặt ngày mai")
+                            .action("BOOK_COURT_TOMORROW")
+                            .params(Map.of("courtId", courtId))
+                            .build(),
+                    ChatResponse.QuickAction.builder()
+                            .label("📅 Chọn ngày khác")
+                            .action("BOOK_COURT_CUSTOM")
+                            .params(Map.of("courtId", courtId))
+                            .build());
+
+            Map<String, Object> actionData = new HashMap<>();
+            actionData.put("court", court);
+
+            return ChatResponse.builder()
+                    .aiResponse(aiResponse)
+                    .messageType(ChatResponse.MessageType.BOOKING_CONFIRM)
+                    .actionData(actionData)
+                    .quickActions(quickActions)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("❌ Error in book court action", e);
+            return buildErrorResponse("Không thể xử lý đặt sân. Vui lòng thử lại.");
+        }
+    }
+
+    // ✅ THÊM: Xem giỏ hàng
+    private ChatResponse handleViewCart(User user, ChatSession session) {
+        try {
+            CartResponse cart = cartService.getCart(user.getId());
+
+            if (cart.getItems().isEmpty()) {
+                return ChatResponse.builder()
+                        .aiResponse("🛒 Giỏ hàng của bạn đang trống.\n\nHãy tìm sản phẩm để mua sắm nhé!")
+                        .messageType(ChatResponse.MessageType.TEXT)
+                        .quickActions(List.of(
+                                ChatResponse.QuickAction.builder()
+                                        .label("🛍️ Tìm sản phẩm")
+                                        .action("SEARCH_PRODUCTS")
+                                        .params(new HashMap<>())
+                                        .build()))
+                        .timestamp(LocalDateTime.now())
+                        .build();
+            }
+
+            StringBuilder cartInfo = new StringBuilder("🛒 Giỏ hàng của bạn:\n\n");
+
+            for (CartItemResponse item : cart.getItems()) {
+                cartInfo.append(String.format(
+                        "• %s\n" +
+                                "  Số lượng: %d x %,dđ = %,dđ\n\n",
+                        item.getProductName(),
+                        item.getQuantity(),
+                        item.getPrice().longValue(),
+                        item.getSubtotal().longValue()));
+            }
+
+            cartInfo.append(String.format(
+                    "━━━━━━━━━━━━━━━━━━\n" +
+                            "Tổng cộng: %,dđ\n\n" +
+                            "Bạn muốn làm gì tiếp theo?",
+                    cart.getTotalAmount().longValue()));
+
+            List<ChatResponse.QuickAction> quickActions = new ArrayList<>();
+            quickActions.add(ChatResponse.QuickAction.builder()
+                    .label("💳 Thanh toán")
+                    .action("CHECKOUT")
+                    .params(new HashMap<>())
+                    .build());
+            quickActions.add(ChatResponse.QuickAction.builder()
+                    .label("🛍️ Tiếp tục mua")
+                    .action("SEARCH_PRODUCTS")
+                    .params(new HashMap<>())
+                    .build());
+
+            // Add remove buttons for each item
+            for (CartItemResponse item : cart.getItems()) {
+                quickActions.add(ChatResponse.QuickAction.builder()
+                        .label("🗑️ Xóa " + item.getProductName())
+                        .action("REMOVE_FROM_CART")
+                        .params(Map.of("cartItemId", item.getId()))
+                        .build());
+            }
+
+            Map<String, Object> actionData = new HashMap<>();
+            actionData.put("cart", cart);
+
+            return ChatResponse.builder()
+                    .aiResponse(cartInfo.toString())
+                    .messageType(ChatResponse.MessageType.TEXT)
+                    .actionData(actionData)
+                    .quickActions(quickActions)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("❌ Error viewing cart", e);
+            return buildErrorResponse("Không thể xem giỏ hàng. Vui lòng thử lại.");
+        }
+    }
+
+    // ✅ THÊM: Xem chi tiết sản phẩm
+    private ChatResponse handleViewProductDetail(User user, Map<String, Object> params, ChatSession session) {
+        try {
+            Long productId = Long.valueOf(params.get("productId").toString());
+            ProductDetailResponse product = productService.getProductById(productId);
+
+            String aiResponse = String.format(
+                    "📦 %s\n\n" +
+                            "💰 Giá: %,dđ %s\n" +
+                            "🏷️ Thương hiệu: %s\n" +
+                            "📊 Đã bán: %d\n" +
+                            "⭐ Đánh giá: %.1f/5 (%d reviews)\n" +
+                            "📦 Còn lại: %d sản phẩm\n\n" +
+                            "📝 Mô tả:\n%s",
+                    product.getName(),
+                    product.getPrice().longValue(),
+                    product.getDiscountPercent() > 0
+                            ? String.format("(-% d%%) từ %,dđ", product.getDiscountPercent(),
+                                    product.getOriginalPrice().longValue())
+                            : "",
+                    product.getBrand(),
+                    product.getSoldQuantity(),
+                    product.getAverageRating(),
+                    product.getReviewCount(),
+                    product.getStockQuantity(),
+                    product.getDescription());
+
+            List<ChatResponse.QuickAction> quickActions = List.of(
+                    ChatResponse.QuickAction.builder()
+                            .label("🛒 Thêm vào giỏ")
+                            .action("ADD_TO_CART")
+                            .params(Map.of("productId", productId, "quantity", 1))
+                            .build(),
+                    ChatResponse.QuickAction.builder()
+                            .label("💳 Mua ngay")
+                            .action("BUY_NOW")
+                            .params(Map.of("productId", productId, "quantity", 1))
+                            .build(),
+                    ChatResponse.QuickAction.builder()
+                            .label("🔍 Tìm sản phẩm tương tự")
+                            .action("SEARCH_PRODUCTS")
+                            .params(Map.of("categoryId", product.getCategoryId()))
+                            .build());
+
+            Map<String, Object> actionData = new HashMap<>();
+            actionData.put("product", product);
+
+            return ChatResponse.builder()
+                    .aiResponse(aiResponse)
+                    .messageType(ChatResponse.MessageType.TEXT)
+                    .actionData(actionData)
+                    .quickActions(quickActions)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("❌ Error viewing product detail", e);
+            return buildErrorResponse("Không thể xem chi tiết sản phẩm. Vui lòng thử lại.");
         }
     }
 
@@ -156,6 +614,12 @@ public class ChatServiceImpl implements ChatService {
 
     private MessageIntent analyzeIntent(String message, User user) {
         String lowerMessage = message.toLowerCase().trim();
+
+        // Cart keywords
+        if (lowerMessage.contains("giỏ hàng") || lowerMessage.contains("cart") ||
+                lowerMessage.contains("xem giỏ")) {
+            return new MessageIntent(IntentType.VIEW_CART, new HashMap<>());
+        }
 
         // Court search keywords
         if (lowerMessage.contains("sân") || lowerMessage.contains("court") ||
@@ -691,7 +1155,7 @@ public class ChatServiceImpl implements ChatService {
 
     private enum IntentType {
         GENERAL, COURT_SEARCH, COURT_BOOKING, PRODUCT_SEARCH,
-        PRODUCT_ORDER, TIER_INFO, LOCATION_UPDATE
+        PRODUCT_ORDER, TIER_INFO, LOCATION_UPDATE, VIEW_CART // ← THÊM VIEW_CART
     }
 
     private static class MessageIntent {

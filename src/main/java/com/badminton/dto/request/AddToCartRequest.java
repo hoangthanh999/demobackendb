@@ -1,4 +1,3 @@
-// backend/src/main/java/com/badminton/dto/request/AddToCartRequest.java
 package com.badminton.dto.request;
 
 import jakarta.validation.constraints.Min;
@@ -12,7 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AddToCartRequest {
 
-    @NotNull(message = "ID sản phẩm không được để trống")
+    @NotNull(message = "Product ID không được để trống")
     private Long productId;
 
     @NotNull(message = "Số lượng không được để trống")
