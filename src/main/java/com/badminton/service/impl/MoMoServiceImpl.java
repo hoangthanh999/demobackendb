@@ -6,6 +6,7 @@ import com.badminton.dto.request.PaymentRequest;
 import com.badminton.dto.response.MoMoPaymentResponse;
 import com.badminton.dto.response.MoMoTransactionStatusResponse;
 import com.badminton.entity.Booking;
+import com.badminton.service.UserTierService;
 import com.badminton.entity.Payment;
 import com.badminton.exception.BadRequestException;
 import com.badminton.exception.ResourceNotFoundException;
@@ -44,6 +45,7 @@ public class MoMoServiceImpl implements MoMoService {
     private final BookingRepository bookingRepository;
     private final PaymentRepository paymentRepository;
     private final ObjectMapper objectMapper;
+    private final UserTierService userTierService;
 
     @Value("${payment.deposit-percentage}")
     private Integer depositPercentage;
@@ -270,9 +272,19 @@ public class MoMoServiceImpl implements MoMoService {
             if (payment.getPaymentType() == Payment.PaymentType.FULL) {
                 payment.setStatus(Payment.PaymentStatus.COMPLETED);
                 payment.getBooking().setStatus(Booking.BookingStatus.CONFIRMED);
+
+                // ✅ THÊM: Update user spending
+                userTierService.addSpending(
+                        payment.getBooking().getUser().getId(),
+                        payment.getAmount());
             } else {
                 payment.setStatus(Payment.PaymentStatus.PARTIAL);
                 payment.getBooking().setStatus(Booking.BookingStatus.CONFIRMED);
+
+                // ✅ THÊM: Update user spending (deposit amount)
+                userTierService.addSpending(
+                        payment.getBooking().getUser().getId(),
+                        payment.getDepositAmount());
             }
 
             paymentRepository.save(payment);

@@ -20,15 +20,42 @@ public class ApiResponse<T> {
     private T data;
     private LocalDateTime timestamp;
 
+    // ✅ THÊM FIELD NÀY
+    private String requestId;
+
     public static <T> ApiResponse<T> success(T data, String message) {
-        return new ApiResponse<>(true, message, data, LocalDateTime.now());
+        return ApiResponse.<T>builder()
+                .success(true)
+                .message(message)
+                .data(data)
+                .timestamp(LocalDateTime.now())
+                .build();
     }
 
     public static <T> ApiResponse<T> success(T data) {
-        return new ApiResponse<>(true, "Thành công", data, LocalDateTime.now());
+        return ApiResponse.<T>builder()
+                .success(true)
+                .message("Thành công")
+                .data(data)
+                .timestamp(LocalDateTime.now())
+                .build();
     }
 
     public static <T> ApiResponse<T> error(String message) {
-        return new ApiResponse<>(false, message, null, LocalDateTime.now());
+        return ApiResponse.<T>builder()
+                .success(false)
+                .message(message)
+                .timestamp(LocalDateTime.now())
+                .build();
     }
+
+    public static <T> ApiResponse<T> validationError(T data) {
+        return ApiResponse.<T>builder()
+                .success(false)
+                .message("Dữ liệu không hợp lệ")
+                .data(data)
+                .timestamp(LocalDateTime.now())
+                .build();
+    }
+
 }

@@ -51,6 +51,23 @@ public class ImageUploadController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "folder", defaultValue = "products") String folder) {
 
+        // ✅ THÊM VALIDATION
+        if (file.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("File không được để trống"));
+        }
+
+        if (file.getSize() > 5 * 1024 * 1024) { // 5MB
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("File không được vượt quá 5MB"));
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Chỉ chấp nhận file ảnh"));
+        }
+
         try {
             log.info("📤 Uploading image to Cloudinary: {}", file.getOriginalFilename());
 

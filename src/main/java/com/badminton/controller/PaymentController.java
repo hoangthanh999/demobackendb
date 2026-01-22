@@ -45,9 +45,8 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success(response, "Tạo thanh toán thành công"));
     }
 
-    // ✅ THÊM MỚI - Mock payment confirmation
     @PostMapping("/mock/confirm/{orderId}")
-
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<PaymentResponse>> confirmMockPayment(
             @PathVariable String orderId,
             @RequestParam(defaultValue = "0") int resultCode) {

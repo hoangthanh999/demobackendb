@@ -3,11 +3,14 @@ package com.badminton.controller;
 import com.badminton.dto.request.BookingRequest;
 import com.badminton.dto.response.ApiResponse;
 import com.badminton.dto.response.BookingResponse;
+import com.badminton.dto.response.BookingResponseWithLinks;
 import com.badminton.entity.User;
 import com.badminton.repository.UserRepository;
 import com.badminton.service.BookingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.beans.BeanUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -117,6 +120,25 @@ public class BookingController {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<BookingResponse> bookings = bookingService.getAllBookings(pageable);
         return ResponseEntity.ok(ApiResponse.success(bookings));
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('USER', 'OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<BookingResponseWithLinks>> getBookingByIdWithLinks(
+            @PathVariable Long id,
+            Authentication authentication) {
+
+        User user = getUserFromAuth(authentication);
+        BookingResponse booking = bookingService.getBookingById(id, user.getId());
+
+        // Convert to HATEOAS response
+        BookingResponseWithLinks response = new BookingResponseWithLinks();
+        BeanUtils.copyProperties(booking, response);
+
+        // Add HATEOAS links
+        response.addLinks(user.getId(), user.getRole().name());
+
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
 }

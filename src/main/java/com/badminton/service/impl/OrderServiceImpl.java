@@ -7,6 +7,7 @@ import com.badminton.dto.response.OrderItemResponse;
 import com.badminton.dto.response.OrderResponse;
 import com.badminton.dto.response.ShopStatisticsResponse;
 import com.badminton.entity.*;
+import com.badminton.service.UserTierService;
 import com.badminton.exception.BadRequestException;
 import com.badminton.exception.ResourceNotFoundException;
 import com.badminton.exception.UnauthorizedException;
@@ -45,6 +46,7 @@ public class OrderServiceImpl implements OrderService {
     private final CartService cartService;
     private final ProductService productService;
     private final ObjectMapper objectMapper;
+    private final UserTierService userTierService;
 
     private static final BigDecimal SHIPPING_FEE = BigDecimal.valueOf(30000); // 30,000 VND
     private static final BigDecimal FREE_SHIPPING_THRESHOLD = BigDecimal.valueOf(500000); // 500,000 VND
@@ -302,6 +304,10 @@ public class OrderServiceImpl implements OrderService {
         order.setStatus(Order.OrderStatus.CONFIRMED);
 
         orderRepository.save(order);
+
+        // ✅ THÊM: Update user spending and tier
+        userTierService.addSpending(order.getUser().getId(), order.getTotalAmount());
+
         log.info("Payment confirmed successfully");
     }
 

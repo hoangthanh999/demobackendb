@@ -86,6 +86,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/courts/**").hasAnyRole("ADMIN", "OWNER")
                         .requestMatchers(HttpMethod.PATCH, "/courts/**").hasAnyRole("ADMIN", "OWNER")
 
+                        .requestMatchers("/chat/**").authenticated()
+                        .requestMatchers("/location/**").authenticated()
+                        .requestMatchers("/user-tier/**").authenticated()
+                        .requestMatchers("/qr/**").authenticated()
+
+                        .requestMatchers("/health", "/error").permitAll()
                         // ✅ Everything else needs auth
                         .anyRequest().authenticated())
 

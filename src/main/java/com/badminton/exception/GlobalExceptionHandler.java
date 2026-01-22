@@ -1,6 +1,8 @@
 package com.badminton.exception;
 
 import com.badminton.dto.response.ApiResponse;
+
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j; // ✅ THÊM
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +15,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
+
 
 @Slf4j // ✅ THÊM
 @RestControllerAdvice
@@ -20,11 +24,18 @@ public class GlobalExceptionHandler {
 
         @ExceptionHandler(ResourceNotFoundException.class)
         public ResponseEntity<ApiResponse<Object>> handleResourceNotFoundException(
-                        ResourceNotFoundException ex) {
-                log.error("❌ Resource not found: {}", ex.getMessage()); // ✅ THÊM
+                        ResourceNotFoundException ex, HttpServletRequest request) {
+
+                String requestId = UUID.randomUUID().toString(); // ✅ Giờ đã OK
+                log.error("❌ [{}] Resource not found at {}: {}",
+                                requestId, request.getRequestURI(), ex.getMessage());
+
+                ApiResponse<Object> response = ApiResponse.error(ex.getMessage());
+                response.setRequestId(requestId); // ✅ Giờ đã OK
+
                 return ResponseEntity
                                 .status(HttpStatus.NOT_FOUND)
-                                .body(ApiResponse.error(ex.getMessage()));
+                                .body(response);
         }
 
         @ExceptionHandler(BadRequestException.class)
@@ -75,15 +86,9 @@ public class GlobalExceptionHandler {
 
                 log.error("❌ Validation error: {}", errors); // ✅ THÊM
 
-                ApiResponse<Map<String, String>> response = new ApiResponse<>(
-                                false,
-                                "Dữ liệu không hợp lệ",
-                                errors,
-                                java.time.LocalDateTime.now());
-
                 return ResponseEntity
                                 .status(HttpStatus.BAD_REQUEST)
-                                .body(response);
+                                .body(ApiResponse.validationError(errors));
         }
 
         @ExceptionHandler(Exception.class)

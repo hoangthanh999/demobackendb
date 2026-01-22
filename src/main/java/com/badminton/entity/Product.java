@@ -13,7 +13,13 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
-@Table(name = "products")
+@Table(name = "products", indexes = {
+        @Index(name = "idx_product_category", columnList = "category_id"),
+        @Index(name = "idx_product_status", columnList = "status"),
+        @Index(name = "idx_product_featured", columnList = "featured"),
+        @Index(name = "idx_product_slug", columnList = "slug"),
+        @Index(name = "idx_product_sold", columnList = "soldQuantity")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

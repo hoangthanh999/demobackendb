@@ -12,7 +12,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
-@Table(name = "courts")
+@Table(name = "courts", indexes = {
+        @Index(name = "idx_court_owner", columnList = "owner_id"),
+        @Index(name = "idx_court_status", columnList = "status")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
