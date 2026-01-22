@@ -1,6 +1,8 @@
 package com.badminton.service;
 
 import com.badminton.dto.response.PaymentResponse;
+import com.badminton.dto.response.ProductResponse;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -19,4 +21,5 @@ public interface PaymentService {
     Page<PaymentResponse> getPaymentsByStatus(String status, Pageable pageable);
 
     List<PaymentResponse> getPendingPayments();
+
 }

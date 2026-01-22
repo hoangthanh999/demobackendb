@@ -1,6 +1,7 @@
 // backend/src/main/java/com/badminton/dto/response/ChatResponse.java
 package com.badminton.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,17 +22,15 @@ public class ChatResponse {
     private String sessionId;
     private String aiResponse;
     private MessageType messageType;
-    private Map<String, Object> actionData; // Data cho actions (courts, products, booking, etc)
-    private List<QuickAction> quickActions; // Gợi ý actions
+    private Map<String, Object> actionData;
+    private List<QuickAction> quickActions;
+
+    // ✅ THÊM FORMAT CHO TIMESTAMP
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime timestamp;
 
     public enum MessageType {
-        TEXT, // Text thuần
-        COURT_LIST, // Danh sách sân
-        PRODUCT_LIST, // Danh sách sản phẩm
-        BOOKING_CONFIRM, // Xác nhận đặt sân
-        PAYMENT_QR, // QR thanh toán
-        ORDER_CONFIRM // Xác nhận đơn hàng
+        TEXT, COURT_LIST, PRODUCT_LIST, BOOKING_CONFIRM, PAYMENT_QR, ORDER_CONFIRM
     }
 
     @Data
@@ -40,7 +39,7 @@ public class ChatResponse {
     @AllArgsConstructor
     public static class QuickAction {
         private String label;
-        private String action; // BOOK_COURT, BUY_PRODUCT, VIEW_CART, etc
+        private String action;
         private Map<String, Object> params;
     }
 }

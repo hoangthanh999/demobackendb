@@ -97,4 +97,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         // Sản phẩm hết hàng
         @Query("SELECT p FROM Product p WHERE p.stockQuantity = 0 AND p.status = 'ACTIVE'")
         List<Product> findOutOfStockProducts(Pageable pageable);
+
+        Page<Product> findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
+                        String name, String description, Pageable pageable);
 }

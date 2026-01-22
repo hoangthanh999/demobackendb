@@ -482,4 +482,17 @@ public class ProductServiceImpl implements ProductService {
 
         return slug;
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> searchProducts(String keyword, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("soldQuantity").descending());
+
+        // ✅ TÌM THEO TÊN HOẶC DESCRIPTION
+        Page<Product> products = productRepository.findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
+                keyword, keyword, pageable);
+
+        // ✅ SỬA: Dùng mapToResponse thay vì mapToProductResponse
+        return products.map(this::mapToResponse);
+    }
 }

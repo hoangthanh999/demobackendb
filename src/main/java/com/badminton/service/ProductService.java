@@ -37,4 +37,6 @@ public interface ProductService {
     void updateProductStatus(Long id, String status);
 
     void updateStock(Long productId, Integer quantity, boolean isIncrease);
+
+    Page<ProductResponse> searchProducts(String keyword, int page, int size);
 }

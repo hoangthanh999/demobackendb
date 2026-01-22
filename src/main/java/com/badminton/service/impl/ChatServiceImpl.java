@@ -263,47 +263,97 @@ public class ChatServiceImpl implements ChatService {
 
     private ChatResponse handleProductSearch(User user, MessageIntent intent, ChatSession session) {
         try {
-            // Search products
-            List<ProductResponse> products = productService.getBestSellingProducts();
+            String keyword = extractKeywordFromMessage(intent.getParams());
+
+            // Search products by keyword
+            List<ProductResponse> products;
+
+            if (keyword != null && !keyword.isEmpty()) {
+                // ✅ TÌM THEO KEYWORD
+                products = productService.searchProducts(keyword, 0, 10).getContent();
+                log.info("🔍 Found {} products for keyword: {}", products.size(), keyword);
+            } else {
+                // ✅ FALLBACK: Lấy sản phẩm bán chạy
+                products = productService.getBestSellingProducts();
+                log.info("📊 Returning {} best-selling products", products.size());
+            }
 
             if (products.isEmpty()) {
                 return ChatResponse.builder()
-                        .aiResponse("Hiện tại chưa có sản phẩm phù hợp. Bạn muốn tìm gì?")
+                        .aiResponse("Xin lỗi, hiện tại chưa có sản phẩm phù hợp với yêu cầu của bạn. Bạn muốn tìm gì?")
                         .messageType(ChatResponse.MessageType.TEXT)
+                        .timestamp(LocalDateTime.now())
                         .quickActions(List.of(
                                 ChatResponse.QuickAction.builder()
-                                        .label("🏸 Tìm sân")
-                                        .action("SEARCH_COURTS")
-                                        .params(new HashMap<>())
+                                        .label("🏸 Tìm vợt cầu lông")
+                                        .action("SEARCH_PRODUCTS")
+                                        .params(Map.of("keyword", "vợt"))
+                                        .build(),
+                                ChatResponse.QuickAction.builder()
+                                        .label("👟 Tìm giày")
+                                        .action("SEARCH_PRODUCTS")
+                                        .params(Map.of("keyword", "giày"))
+                                        .build(),
+                                ChatResponse.QuickAction.builder()
+                                        .label("👕 Tìm quần áo")
+                                        .action("SEARCH_PRODUCTS")
+                                        .params(Map.of("keyword", "quần áo"))
                                         .build()))
                         .build();
             }
 
-            String aiResponse = String.format("Tôi tìm thấy %d sản phẩm cho bạn:", products.size());
+            // ✅ TẠO RESPONSE VỚI THÔNG TIN CHI TIẾT
+            String aiResponse = keyword != null
+                    ? String.format("Tôi tìm thấy %d sản phẩm về '%s' cho bạn:", products.size(), keyword)
+                    : String.format("Đây là %d sản phẩm bán chạy nhất:", products.size());
 
             Map<String, Object> actionData = new HashMap<>();
             actionData.put("products", products);
+            actionData.put("keyword", keyword);
 
             List<ChatResponse.QuickAction> quickActions = products.stream()
-                    .limit(3) // Giới hạn 3 quick actions
+                    .limit(5) // ✅ TĂNG TỪ 3 LÊN 5
                     .map(product -> ChatResponse.QuickAction.builder()
-                            .label("Mua " + product.getName())
+                            .label(String.format("Mua %s - %,dđ",
+                                    product.getName().length() > 30
+                                            ? product.getName().substring(0, 30) + "..."
+                                            : product.getName(),
+                                    product.getPrice().longValue()))
                             .action("BUY_PRODUCT")
-                            .params(Map.of("productId", product.getId()))
+                            .params(Map.of(
+                                    "productId", product.getId(),
+                                    "productName", product.getName(),
+                                    "price", product.getPrice()))
                             .build())
                     .collect(Collectors.toList());
+
+            // ✅ THÊM ACTION XEM TẤT CẢ
+            quickActions.add(ChatResponse.QuickAction.builder()
+                    .label("📋 Xem tất cả sản phẩm")
+                    .action("VIEW_ALL_PRODUCTS")
+                    .params(Map.of("keyword", keyword != null ? keyword : ""))
+                    .build());
 
             return ChatResponse.builder()
                     .aiResponse(aiResponse)
                     .messageType(ChatResponse.MessageType.PRODUCT_LIST)
                     .actionData(actionData)
                     .quickActions(quickActions)
+                    .timestamp(LocalDateTime.now())
                     .build();
 
         } catch (Exception e) {
             log.error("❌ Error searching products", e);
             return buildErrorResponse("Không thể tìm sản phẩm lúc này. Vui lòng thử lại sau.");
         }
+    }
+
+    // ✅ THÊM METHOD EXTRACT KEYWORD
+    private String extractKeywordFromMessage(Map<String, Object> params) {
+        if (params.containsKey("keyword")) {
+            return (String) params.get("keyword");
+        }
+        return null;
     }
 
     private ChatResponse handleProductOrder(User user, MessageIntent intent, ChatSession session) {
@@ -494,8 +544,41 @@ public class ChatServiceImpl implements ChatService {
     }
 
     private Map<String, Object> extractProductSearchParams(String message) {
-        // TODO: Extract params like category, brand, price range using NLP
-        return new HashMap<>();
+        Map<String, Object> params = new HashMap<>();
+        String lowerMessage = message.toLowerCase().trim();
+
+        // ✅ DETECT KEYWORD
+        if (lowerMessage.contains("vợt")) {
+            params.put("keyword", "vợt");
+        } else if (lowerMessage.contains("giày")) {
+            params.put("keyword", "giày");
+        } else if (lowerMessage.contains("áo") || lowerMessage.contains("quần")) {
+            params.put("keyword", "quần áo");
+        } else if (lowerMessage.contains("cầu lông") && !lowerMessage.contains("vợt")) {
+            params.put("keyword", "cầu lông"); // Quả cầu
+        } else if (lowerMessage.contains("túi") || lowerMessage.contains("balo")) {
+            params.put("keyword", "túi");
+        } else if (lowerMessage.contains("phụ kiện")) {
+            params.put("keyword", "phụ kiện");
+        }
+
+        // ✅ DETECT BRAND
+        if (lowerMessage.contains("yonex")) {
+            params.put("brand", "Yonex");
+        } else if (lowerMessage.contains("victor")) {
+            params.put("brand", "Victor");
+        } else if (lowerMessage.contains("lining")) {
+            params.put("brand", "Lining");
+        }
+
+        // ✅ DETECT PRICE RANGE
+        if (lowerMessage.contains("rẻ") || lowerMessage.contains("giá rẻ")) {
+            params.put("maxPrice", 1000000);
+        } else if (lowerMessage.contains("cao cấp") || lowerMessage.contains("đắt")) {
+            params.put("minPrice", 3000000);
+        }
+
+        return params;
     }
 
     // ==================== HELPER METHODS ====================
