@@ -122,7 +122,7 @@ public class BookingController {
         return ResponseEntity.ok(ApiResponse.success(bookings));
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/hateas/{id}")
     @PreAuthorize("hasAnyRole('USER', 'OWNER', 'ADMIN')")
     public ResponseEntity<ApiResponse<BookingResponseWithLinks>> getBookingByIdWithLinks(
             @PathVariable Long id,
