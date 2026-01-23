@@ -194,9 +194,6 @@ public class ChatServiceImpl implements ChatService {
             cartRequest.setProductId(productId);
             cartRequest.setQuantity(quantity);
 
-            // Add to cart
-            cartService.addToCart(user.getId(), cartRequest);
-
             // Get product info
             ProductDetailResponse product = productService.getProductById(productId);
 

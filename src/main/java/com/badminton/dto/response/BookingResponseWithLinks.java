@@ -34,9 +34,6 @@ public class BookingResponseWithLinks extends RepresentationModel<BookingRespons
         private String status;
         private LocalDateTime createdAt;
 
-        /**
-         * Thêm HATEOAS links dựa trên trạng thái booking
-         */
         public void addLinks(Long userId, String userRole) {
                 // Self link
                 add(linkTo(methodOn(BookingController.class)
