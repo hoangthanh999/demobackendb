@@ -114,7 +114,8 @@ public class Order {
     public enum PaymentMethod {
         COD, // Thanh toán khi nhận hàng
         MOMO, // MoMo
-        BANK_TRANSFER // Chuyển khoản
+        BANK_TRANSFER, // Chuyển khoản
+        ONLINE // Thanh toán online (VNPay, MoMo, etc.)
     }
 
     public enum PaymentStatus {
