@@ -114,9 +114,10 @@ public class ChatServiceImpl implements ChatService {
                 case "CHECKOUT" -> handleCheckout(user, params, session);
                 case "VIEW_PRODUCT_DETAIL" -> handleViewProductDetail(user, params, session);
                 case "BOOK_COURT" -> handleBookCourtAction(user, params, session);
+                case "VIEW_ORDER" -> handleViewOrder(user, params, session);
+                case "VIEW_ORDERS" -> handleViewOrders(user, session);
                 default -> buildErrorResponse("Action không hợp lệ");
             };
-
         } catch (Exception e) {
             log.error("❌ Error handling action", e);
             return buildErrorResponse("Không thể xử lý yêu cầu. Vui lòng thử lại.");
@@ -382,7 +383,7 @@ public class ChatServiceImpl implements ChatService {
             List<ChatResponse.QuickAction> quickActions = new ArrayList<>();
 
             if ("ONLINE".equals(originalPaymentMethod) || "BANK_TRANSFER".equals(originalPaymentMethod)) {
-                log.info("✅ Adding VNPay and MoMo payment options");
+                log.info("✅ Adding VNPay, MoMo and PayOS payment options");
 
                 quickActions.add(ChatResponse.QuickAction.builder()
                         .label("💳 Thanh toán VNPay")
@@ -393,6 +394,12 @@ public class ChatServiceImpl implements ChatService {
                 quickActions.add(ChatResponse.QuickAction.builder()
                         .label("💰 Thanh toán MoMo")
                         .action("PAY_MOMO")
+                        .params(Map.of("orderId", order.getId()))
+                        .build());
+
+                quickActions.add(ChatResponse.QuickAction.builder()
+                        .label("🏦 Thanh toán PayOS")
+                        .action("PAY_PAYOS")
                         .params(Map.of("orderId", order.getId()))
                         .build());
             }
@@ -428,6 +435,151 @@ public class ChatServiceImpl implements ChatService {
             log.error("❌ Stack trace: ", e);
             return buildErrorResponse("Không thể tạo đơn hàng. Vui lòng thử lại. Lỗi: " + e.getMessage());
         }
+    }
+
+    // ✅ NEW: Handle VIEW_ORDER action
+    private ChatResponse handleViewOrder(User user, Map<String, Object> params, ChatSession session) {
+        try {
+            Long orderId = Long.valueOf(params.get("orderId").toString());
+            OrderResponse order = orderService.getOrderById(orderId, user.getId());
+
+            StringBuilder aiResponse = new StringBuilder();
+            aiResponse.append(String.format("📦 **Đơn hàng #%s**\n\n", order.getOrderNumber()));
+            aiResponse.append(String.format("📅 Ngày đặt: %s\n", order.getCreatedAt()));
+            aiResponse.append(String.format("💰 Tổng tiền: %,dđ\n", order.getTotalAmount().longValue()));
+            aiResponse.append(String.format("📍 Trạng thái: %s\n", getOrderStatusText(order.getStatus())));
+            aiResponse.append(String.format("💳 Thanh toán: %s\n\n", getPaymentMethodText(order.getPaymentMethod())));
+
+            aiResponse.append("**Sản phẩm:**\n");
+            if (order.getItems() != null) {
+                for (var item : order.getItems()) {
+                    aiResponse.append(String.format("• %s x%d - %,dđ\n",
+                            item.getProductName(),
+                            item.getQuantity(),
+                            item.getPrice().longValue()));
+                }
+            }
+
+            aiResponse.append(String.format("\n📫 Giao đến: %s\n", order.getShippingAddress()));
+            aiResponse.append(String.format("📞 SĐT: %s\n", order.getRecipientPhone()));
+
+            List<ChatResponse.QuickAction> quickActions = new ArrayList<>();
+
+            // Add cancel button if order is pending
+            if ("PENDING".equals(order.getStatus())) {
+                quickActions.add(ChatResponse.QuickAction.builder()
+                        .label("❌ Hủy đơn hàng")
+                        .action("CANCEL_ORDER")
+                        .params(Map.of("orderId", order.getId()))
+                        .build());
+            }
+
+            quickActions.add(ChatResponse.QuickAction.builder()
+                    .label("📋 Xem tất cả đơn")
+                    .action("VIEW_ORDERS")
+                    .params(new HashMap<>())
+                    .build());
+
+            quickActions.add(ChatResponse.QuickAction.builder()
+                    .label("🛍️ Tiếp tục mua")
+                    .action("SEARCH_PRODUCTS")
+                    .params(new HashMap<>())
+                    .build());
+
+            return ChatResponse.builder()
+                    .aiResponse(aiResponse.toString())
+                    .messageType(ChatResponse.MessageType.TEXT)
+                    .quickActions(quickActions)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("❌ Error viewing order", e);
+            return buildErrorResponse("Không thể xem chi tiết đơn hàng. Vui lòng thử lại.");
+        }
+    }
+
+    // ✅ NEW: Handle VIEW_ORDERS action
+    private ChatResponse handleViewOrders(User user, ChatSession session) {
+        try {
+            Pageable pageable = PageRequest.of(0, 10, Sort.by("createdAt").descending());
+            Page<OrderResponse> ordersPage = orderService.getUserOrders(user.getId(), pageable);
+
+            if (ordersPage.isEmpty()) {
+                return ChatResponse.builder()
+                        .aiResponse("📦 Bạn chưa có đơn hàng nào.\n\nHãy khám phá các sản phẩm của chúng tôi!")
+                        .messageType(ChatResponse.MessageType.TEXT)
+                        .quickActions(List.of(
+                                ChatResponse.QuickAction.builder()
+                                        .label("🛍️ Xem sản phẩm")
+                                        .action("SEARCH_PRODUCTS")
+                                        .params(new HashMap<>())
+                                        .build()))
+                        .timestamp(LocalDateTime.now())
+                        .build();
+            }
+
+            StringBuilder aiResponse = new StringBuilder();
+            aiResponse.append(String.format("📦 **Danh sách đơn hàng** (%d đơn)\n\n", ordersPage.getTotalElements()));
+
+            List<ChatResponse.QuickAction> quickActions = new ArrayList<>();
+
+            for (OrderResponse order : ordersPage.getContent()) {
+                aiResponse.append(String.format("🔹 Đơn #%s\n", order.getOrderNumber()));
+                aiResponse.append(String.format("   Ngày: %s\n", order.getCreatedAt()));
+                aiResponse.append(String.format("   Tổng: %,dđ\n", order.getTotalAmount().longValue()));
+                aiResponse.append(String.format("   Trạng thái: %s\n\n", getOrderStatusText(order.getStatus())));
+
+                // Add quick action for each order
+                quickActions.add(ChatResponse.QuickAction.builder()
+                        .label(String.format("📦 #%s",
+                                order.getOrderNumber().substring(0, Math.min(8, order.getOrderNumber().length()))))
+                        .action("VIEW_ORDER")
+                        .params(Map.of("orderId", order.getId()))
+                        .build());
+            }
+
+            // Add general actions
+            quickActions.add(ChatResponse.QuickAction.builder()
+                    .label("🛍️ Tiếp tục mua")
+                    .action("SEARCH_PRODUCTS")
+                    .params(new HashMap<>())
+                    .build());
+
+            return ChatResponse.builder()
+                    .aiResponse(aiResponse.toString())
+                    .messageType(ChatResponse.MessageType.TEXT)
+                    .quickActions(quickActions)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("❌ Error viewing orders", e);
+            return buildErrorResponse("Không thể xem danh sách đơn hàng. Vui lòng thử lại.");
+        }
+    }
+
+    // Helper methods for order display
+    private String getOrderStatusText(String status) {
+        return switch (status) {
+            case "PENDING" -> "⏳ Chờ xác nhận";
+            case "CONFIRMED" -> "✅ Đã xác nhận";
+            case "PROCESSING" -> "📦 Đang xử lý";
+            case "SHIPPING" -> "🚚 Đang giao hàng";
+            case "DELIVERED" -> "✅ Đã giao hàng";
+            case "CANCELLED" -> "❌ Đã hủy";
+            default -> status;
+        };
+    }
+
+    private String getPaymentMethodText(String method) {
+        return switch (method) {
+            case "CASH" -> "💵 Tiền mặt";
+            case "BANK_TRANSFER" -> "🏦 Chuyển khoản";
+            case "MOMO" -> "🟣 MoMo";
+            case "VNPAY" -> "🔵 VNPay";
+            default -> method;
+        };
     }
 
     private ChatResponse handleBookCourtAction(User user, Map<String, Object> params, ChatSession session) {
