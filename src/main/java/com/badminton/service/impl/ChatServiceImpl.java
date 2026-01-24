@@ -278,10 +278,21 @@ public class ChatServiceImpl implements ChatService {
         try {
             String paymentMethod = params.containsKey("paymentMethod")
                     ? (String) params.get("paymentMethod")
-                    : "ONLINE";
+                    : "BANK_TRANSFER"; // Default changed from ONLINE to BANK_TRANSFER
 
             log.info("🔵 Checkout started - paymentMethod: {}", paymentMethod);
             log.info("🔵 Params: {}", params);
+
+            // ✅ SỬA: Lưu giá trị original để hiển thị message đúng
+            String originalPaymentMethod = params.containsKey("paymentMethod")
+                    ? (String) params.get("paymentMethod")
+                    : "BANK_TRANSFER";
+
+            // ✅ SỬA: Map "ONLINE" to "BANK_TRANSFER"
+            if ("ONLINE".equals(paymentMethod)) {
+                paymentMethod = "BANK_TRANSFER";
+                log.info("🔵 Mapped ONLINE → BANK_TRANSFER");
+            }
 
             // ✅ SỬA: Xác định xem đây là "Mua ngay" hay "Thanh toán từ giỏ hàng"
             boolean isBuyNow = params.containsKey("productId");
@@ -360,15 +371,17 @@ public class ChatServiceImpl implements ChatService {
                             "%s",
                     order.getOrderNumber(),
                     order.getTotalAmount().longValue(),
-                    paymentMethod.equals("ONLINE") ? "Thanh toán online" : "COD",
+                    "ONLINE".equals(originalPaymentMethod) || "BANK_TRANSFER".equals(originalPaymentMethod)
+                            ? "Thanh toán online"
+                            : "COD",
                     order.getShippingAddress(),
-                    paymentMethod.equals("ONLINE")
+                    "ONLINE".equals(originalPaymentMethod) || "BANK_TRANSFER".equals(originalPaymentMethod)
                             ? "Vui lòng thanh toán để hoàn tất đơn hàng."
                             : "Đơn hàng sẽ được giao trong 2-3 ngày.");
 
             List<ChatResponse.QuickAction> quickActions = new ArrayList<>();
 
-            if (paymentMethod.equals("ONLINE")) {
+            if ("ONLINE".equals(originalPaymentMethod) || "BANK_TRANSFER".equals(originalPaymentMethod)) {
                 log.info("✅ Adding VNPay and MoMo payment options");
 
                 quickActions.add(ChatResponse.QuickAction.builder()

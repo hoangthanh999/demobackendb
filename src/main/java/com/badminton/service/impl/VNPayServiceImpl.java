@@ -3,7 +3,6 @@ package com.badminton.service.impl;
 import com.badminton.config.VNPayConfig;
 import com.badminton.dto.response.VNPayPaymentResponse;
 
-
 import com.badminton.entity.Booking;
 import com.badminton.entity.Order;
 import com.badminton.entity.Payment;
@@ -80,8 +79,8 @@ public class VNPayServiceImpl implements VNPayService {
         String vnpCreateDate = formatter.format(cld.getTime());
         vnpParams.put("vnp_CreateDate", vnpCreateDate);
 
-        // Expire after 15 minutes
-        cld.add(Calendar.MINUTE, 15);
+        // Expire after 30 minutes (increased to prevent timeout)
+        cld.add(Calendar.MINUTE, 30);
         String vnpExpireDate = formatter.format(cld.getTime());
         vnpParams.put("vnp_ExpireDate", vnpExpireDate);
 
@@ -136,7 +135,7 @@ public class VNPayServiceImpl implements VNPayService {
         String vnpCreateDate = formatter.format(cld.getTime());
         vnpParams.put("vnp_CreateDate", vnpCreateDate);
 
-        cld.add(Calendar.MINUTE, 15);
+        cld.add(Calendar.MINUTE, 30); // Increased to prevent timeout
         String vnpExpireDate = formatter.format(cld.getTime());
         vnpParams.put("vnp_ExpireDate", vnpExpireDate);
 

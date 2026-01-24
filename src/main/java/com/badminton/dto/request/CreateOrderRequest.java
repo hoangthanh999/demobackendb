@@ -45,7 +45,7 @@ public class CreateOrderRequest {
     private String couponCode; // Mã giảm giá (optional)
 
     public enum PaymentMethod {
-        COD, MOMO, BANK_TRANSFER, ONLINE
+        COD, MOMO, BANK_TRANSFER
     }
 
     @Data
