@@ -73,9 +73,10 @@ public class VNPayServiceImpl implements VNPayService {
         vnpParams.put("vnp_ReturnUrl", vnPayConfig.getReturnUrl());
         vnpParams.put("vnp_IpAddr", VNPayUtil.getIpAddress(request));
 
-        // 5. Create date (yyyyMMddHHmmss)
+        // 5. Create date (yyyyMMddHHmmss) with timezone
         Calendar cld = Calendar.getInstance(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
         SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMddHHmmss");
+        formatter.setTimeZone(TimeZone.getTimeZone("Asia/Ho_Chi_Minh")); // Fix: set timezone for formatter
         String vnpCreateDate = formatter.format(cld.getTime());
         vnpParams.put("vnp_CreateDate", vnpCreateDate);
 
@@ -83,6 +84,8 @@ public class VNPayServiceImpl implements VNPayService {
         cld.add(Calendar.MINUTE, 30);
         String vnpExpireDate = formatter.format(cld.getTime());
         vnpParams.put("vnp_ExpireDate", vnpExpireDate);
+
+        log.info("🔵 VNPay dates - Create: {}, Expire: {}", vnpCreateDate, vnpExpireDate);
 
         // 6. Build hash data and create secure hash
         String hashData = VNPayUtil.buildHashData(vnpParams);
@@ -129,15 +132,19 @@ public class VNPayServiceImpl implements VNPayService {
         vnpParams.put("vnp_ReturnUrl", vnPayConfig.getReturnUrl() + "?type=order");
         vnpParams.put("vnp_IpAddr", VNPayUtil.getIpAddress(request));
 
-        // 4. Create date
+        // 4. Create date with timezone
         Calendar cld = Calendar.getInstance(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
         SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMddHHmmss");
+        formatter.setTimeZone(TimeZone.getTimeZone("Asia/Ho_Chi_Minh")); // Fix: set timezone for formatter
         String vnpCreateDate = formatter.format(cld.getTime());
         vnpParams.put("vnp_CreateDate", vnpCreateDate);
 
         cld.add(Calendar.MINUTE, 30); // Increased to prevent timeout
         String vnpExpireDate = formatter.format(cld.getTime());
         vnpParams.put("vnp_ExpireDate", vnpExpireDate);
+
+        log.info("🔵 VNPay dates for order {} - Create: {}, Expire: {}", order.getOrderNumber(), vnpCreateDate,
+                vnpExpireDate);
 
         // 5. Create secure hash
         String hashData = VNPayUtil.buildHashData(vnpParams);
