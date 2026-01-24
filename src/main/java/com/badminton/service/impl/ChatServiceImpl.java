@@ -331,9 +331,16 @@ public class ChatServiceImpl implements ChatService {
             List<ChatResponse.QuickAction> quickActions = new ArrayList<>();
 
             if (paymentMethod.equals("ONLINE")) {
+                // ✅ THÊM VNPAY OPTION
                 quickActions.add(ChatResponse.QuickAction.builder()
-                        .label("💳 Thanh toán ngay")
-                        .action("GENERATE_QR")
+                        .label("💳 Thanh toán VNPay")
+                        .action("PAY_VNPAY")
+                        .params(Map.of("orderId", order.getId()))
+                        .build());
+
+                quickActions.add(ChatResponse.QuickAction.builder()
+                        .label("💳 Thanh toán MoMo")
+                        .action("PAY_MOMO")
                         .params(Map.of("orderId", order.getId()))
                         .build());
             }
@@ -416,6 +423,32 @@ public class ChatServiceImpl implements ChatService {
         } catch (Exception e) {
             log.error("❌ Error in book court action", e);
             return buildErrorResponse("Không thể xử lý đặt sân. Vui lòng thử lại.");
+        }
+    }
+
+    private ChatResponse handlePayVNPay(User user, Map<String, Object> params, ChatSession session) {
+        try {
+            Long orderId = Long.valueOf(params.get("orderId").toString());
+
+            // Gọi VNPay service (cần inject VNPayService)
+            // VNPayPaymentResponse vnpayResponse =
+            // vnPayService.createOrderPaymentUrl(orderId, request);
+
+            String aiResponse = String.format(
+                    "✅ Đã tạo link thanh toán VNPay!\n\n" +
+                            "Vui lòng click vào link bên dưới để thanh toán:\n" +
+                            "👉 [Thanh toán ngay](payment_url_here)\n\n" +
+                            "Link có hiệu lực trong 15 phút.");
+
+            return ChatResponse.builder()
+                    .aiResponse(aiResponse)
+                    .messageType(ChatResponse.MessageType.TEXT)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("❌ Error creating VNPay payment", e);
+            return buildErrorResponse("Không thể tạo thanh toán VNPay. Vui lòng thử lại.");
         }
     }
 

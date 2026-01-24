@@ -66,6 +66,7 @@ public class SecurityConfig {
                                 "/payments/mock/**",
                                 "/shop/payments/momo/webhook",
                                 "/shop/payments/mock/**",
+                                "/payments/vnpay/callback",
                                 "/error")
                         .permitAll()
 
