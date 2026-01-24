@@ -44,19 +44,27 @@ public class PayOSServiceImpl implements PayOSService {
                     payOSConfig.getChecksumKey());
 
             // 3. Create order code (unique for PayOS)
-            long orderCode = System.currentTimeMillis() / 1000;
+            // long orderCode = System.currentTimeMillis() / 1000; // Original line
+
+            long orderCode = Long.parseLong(order.getMomoOrderId());
+
+            // ✅ FIX: Giới hạn description 25 ký tự
+            String description = "DH " + order.getOrderNumber().substring(4, 17); // "DH 20260124_81390" = 17 chars
+
+            String returnUrl = payOSConfig.getReturnUrl() + "?type=order";
+            String cancelUrl = payOSConfig.getCancelUrl() + "?type=order";
 
             // 4. Create payment link request (v2 API)
-            CreatePaymentLinkRequest paymentData = CreatePaymentLinkRequest.builder()
+            CreatePaymentLinkRequest paymentRequest = CreatePaymentLinkRequest.builder()
                     .orderCode(orderCode)
                     .amount(order.getTotalAmount().longValue())
-                    .description("Thanh toan don hang " + order.getOrderNumber())
-                    .returnUrl(payOSConfig.getReturnUrl() + "?type=order")
-                    .cancelUrl(payOSConfig.getCancelUrl() + "?type=order")
+                    .description(description)
+                    .returnUrl(returnUrl)
+                    .cancelUrl(cancelUrl)
                     .build();
 
             // 5. Create payment link
-            CreatePaymentLinkResponse response = payOS.paymentRequests().create(paymentData);
+            CreatePaymentLinkResponse response = payOS.paymentRequests().create(paymentRequest);
 
             // 6. Save PayOS order code to order
             order.setMomoOrderId(String.valueOf(orderCode)); // Reuse this field
