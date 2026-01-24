@@ -281,17 +281,56 @@ public class ChatServiceImpl implements ChatService {
                     ? (String) params.get("paymentMethod")
                     : "ONLINE";
 
+            log.info("🔵 Checkout started - paymentMethod: {}", paymentMethod);
+            log.info("🔵 Params: {}", params);
+
             // Get cart
             CartResponse cart = cartService.getCart(user.getId());
+            log.info("🔵 Cart items: {}", cart.getItems().size());
 
             if (cart.getItems().isEmpty()) {
+                log.warn("⚠️ Cart is empty");
                 return buildErrorResponse("Giỏ hàng trống. Vui lòng thêm sản phẩm trước.");
+            }
+
+            // ✅ KIỂM TRA: Nếu có productId trong params, thêm vào cart trước
+            if (params.containsKey("productId")) {
+                log.info("🔵 Adding product to cart before checkout");
+                Long productId = Long.valueOf(params.get("productId").toString());
+                Integer quantity = params.containsKey("quantity")
+                        ? Integer.valueOf(params.get("quantity").toString())
+                        : 1;
+
+                AddToCartRequest cartRequest = new AddToCartRequest();
+                cartRequest.setProductId(productId);
+                cartRequest.setQuantity(quantity);
+
+                try {
+                    cartService.addToCart(user.getId(), cartRequest);
+                    cart = cartService.getCart(user.getId()); // Refresh cart
+                    log.info("✅ Product added to cart, new cart size: {}", cart.getItems().size());
+                } catch (Exception e) {
+                    log.error("❌ Error adding product to cart", e);
+                    return buildErrorResponse("Không thể thêm sản phẩm vào giỏ hàng. Vui lòng thử lại.");
+                }
+            }
+
+            // ✅ CHECK: User info
+            log.info("🔵 User info - Name: {}, Phone: {}, Address: {}",
+                    user.getFullName(), user.getPhone(), user.getAddress());
+
+            if (user.getPhone() == null || user.getPhone().isEmpty()) {
+                return buildErrorResponse("Vui lòng cập nhật số điện thoại trong hồ sơ trước khi đặt hàng.");
+            }
+
+            if (user.getAddress() == null || user.getAddress().isEmpty()) {
+                return buildErrorResponse("Vui lòng cập nhật địa chỉ trong hồ sơ trước khi đặt hàng.");
             }
 
             // ✅ SỬA: Dùng CreateOrderRequest
             CreateOrderRequest orderRequest = new CreateOrderRequest();
             orderRequest.setRecipientName(user.getFullName());
-            orderRequest.setRecipientPhone(user.getPhone()); // ✅ SỬA: getPhone()
+            orderRequest.setRecipientPhone(user.getPhone());
             orderRequest.setShippingAddress(user.getAddress());
             orderRequest.setShippingProvince(user.getProvince());
             orderRequest.setShippingDistrict(user.getDistrict());
@@ -309,10 +348,14 @@ public class ChatServiceImpl implements ChatService {
                     .collect(Collectors.toList());
             orderRequest.setItems(items);
 
+            log.info("🔵 Order items count: {}", items.size());
+
             // ✅ SỬA: Set payment method
             orderRequest.setPaymentMethod(CreateOrderRequest.PaymentMethod.valueOf(paymentMethod));
 
+            log.info("🔵 Creating order...");
             OrderResponse order = orderService.createOrder(user.getId(), orderRequest);
+            log.info("✅ Order created: {}", order.getOrderNumber());
 
             String aiResponse = String.format(
                     "✅ Đơn hàng #%s đã được tạo!\n\n" +
@@ -331,7 +374,8 @@ public class ChatServiceImpl implements ChatService {
             List<ChatResponse.QuickAction> quickActions = new ArrayList<>();
 
             if (paymentMethod.equals("ONLINE")) {
-                // ✅ THÊM VNPAY OPTION
+                log.info("✅ Adding VNPay and MoMo payment options");
+
                 quickActions.add(ChatResponse.QuickAction.builder()
                         .label("💳 Thanh toán VNPay")
                         .action("PAY_VNPAY")
@@ -339,7 +383,7 @@ public class ChatServiceImpl implements ChatService {
                         .build());
 
                 quickActions.add(ChatResponse.QuickAction.builder()
-                        .label("💳 Thanh toán MoMo")
+                        .label("💰 Thanh toán MoMo")
                         .action("PAY_MOMO")
                         .params(Map.of("orderId", order.getId()))
                         .build());
@@ -357,6 +401,8 @@ public class ChatServiceImpl implements ChatService {
                     .params(new HashMap<>())
                     .build());
 
+            log.info("🔵 Quick actions count: {}", quickActions.size());
+
             Map<String, Object> actionData = new HashMap<>();
             actionData.put("order", order);
 
@@ -370,11 +416,12 @@ public class ChatServiceImpl implements ChatService {
 
         } catch (Exception e) {
             log.error("❌ Error in checkout", e);
-            return buildErrorResponse("Không thể tạo đơn hàng. Vui lòng thử lại.");
+            log.error("❌ Error details: {}", e.getMessage());
+            log.error("❌ Stack trace: ", e);
+            return buildErrorResponse("Không thể tạo đơn hàng. Vui lòng thử lại. Lỗi: " + e.getMessage());
         }
     }
 
-    // ✅ THÊM: handleBookCourtAction
     private ChatResponse handleBookCourtAction(User user, Map<String, Object> params, ChatSession session) {
         try {
             Long courtId = Long.valueOf(params.get("courtId").toString());
