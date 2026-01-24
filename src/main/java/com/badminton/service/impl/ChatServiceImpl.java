@@ -25,7 +25,6 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
 @Slf4j
 public class ChatServiceImpl implements ChatService {
 
@@ -284,36 +283,8 @@ public class ChatServiceImpl implements ChatService {
             log.info("🔵 Checkout started - paymentMethod: {}", paymentMethod);
             log.info("🔵 Params: {}", params);
 
-            // Get cart
-            CartResponse cart = cartService.getCart(user.getId());
-            log.info("🔵 Cart items: {}", cart.getItems().size());
-
-            if (cart.getItems().isEmpty()) {
-                log.warn("⚠️ Cart is empty");
-                return buildErrorResponse("Giỏ hàng trống. Vui lòng thêm sản phẩm trước.");
-            }
-
-            // ✅ KIỂM TRA: Nếu có productId trong params, thêm vào cart trước
-            if (params.containsKey("productId")) {
-                log.info("🔵 Adding product to cart before checkout");
-                Long productId = Long.valueOf(params.get("productId").toString());
-                Integer quantity = params.containsKey("quantity")
-                        ? Integer.valueOf(params.get("quantity").toString())
-                        : 1;
-
-                AddToCartRequest cartRequest = new AddToCartRequest();
-                cartRequest.setProductId(productId);
-                cartRequest.setQuantity(quantity);
-
-                try {
-                    cartService.addToCart(user.getId(), cartRequest);
-                    cart = cartService.getCart(user.getId()); // Refresh cart
-                    log.info("✅ Product added to cart, new cart size: {}", cart.getItems().size());
-                } catch (Exception e) {
-                    log.error("❌ Error adding product to cart", e);
-                    return buildErrorResponse("Không thể thêm sản phẩm vào giỏ hàng. Vui lòng thử lại.");
-                }
-            }
+            // ✅ SỬA: Xác định xem đây là "Mua ngay" hay "Thanh toán từ giỏ hàng"
+            boolean isBuyNow = params.containsKey("productId");
 
             // ✅ CHECK: User info
             log.info("🔵 User info - Name: {}, Phone: {}, Address: {}",
@@ -327,7 +298,7 @@ public class ChatServiceImpl implements ChatService {
                 return buildErrorResponse("Vui lòng cập nhật địa chỉ trong hồ sơ trước khi đặt hàng.");
             }
 
-            // ✅ SỬA: Dùng CreateOrderRequest
+            // ✅ SỬA: Tạo CreateOrderRequest
             CreateOrderRequest orderRequest = new CreateOrderRequest();
             orderRequest.setRecipientName(user.getFullName());
             orderRequest.setRecipientPhone(user.getPhone());
@@ -336,22 +307,46 @@ public class ChatServiceImpl implements ChatService {
             orderRequest.setShippingDistrict(user.getDistrict());
             orderRequest.setShippingWard(user.getWard());
             orderRequest.setNote("Đặt hàng từ chat");
-
-            // ✅ SỬA: Tạo order items từ cart
-            List<CreateOrderRequest.OrderItemRequest> items = cart.getItems().stream()
-                    .map(item -> {
-                        CreateOrderRequest.OrderItemRequest orderItem = new CreateOrderRequest.OrderItemRequest();
-                        orderItem.setProductId(item.getProductId());
-                        orderItem.setQuantity(item.getQuantity());
-                        return orderItem;
-                    })
-                    .collect(Collectors.toList());
-            orderRequest.setItems(items);
-
-            log.info("🔵 Order items count: {}", items.size());
-
-            // ✅ SỬA: Set payment method
             orderRequest.setPaymentMethod(CreateOrderRequest.PaymentMethod.valueOf(paymentMethod));
+
+            if (isBuyNow) {
+                // ✅ FLOW "MUA NGAY": Tạo order trực tiếp từ productId, KHÔNG thêm vào cart
+                log.info("🔵 Buy Now flow - creating order directly from productId");
+                Long productId = Long.valueOf(params.get("productId").toString());
+                Integer quantity = params.containsKey("quantity")
+                        ? Integer.valueOf(params.get("quantity").toString())
+                        : 1;
+
+                CreateOrderRequest.OrderItemRequest orderItem = new CreateOrderRequest.OrderItemRequest();
+                orderItem.setProductId(productId);
+                orderItem.setQuantity(quantity);
+                orderRequest.setItems(List.of(orderItem));
+
+                log.info("🔵 Order items count: 1 (buy now)");
+            } else {
+                // ✅ FLOW "THANH TOÁN TỪ GIỎ HÀNG": Lấy items từ cart
+                log.info("🔵 Checkout from cart flow");
+                CartResponse cart = cartService.getCart(user.getId());
+                log.info("🔵 Cart items: {}", cart.getItems().size());
+
+                if (cart.getItems().isEmpty()) {
+                    log.warn("⚠️ Cart is empty");
+                    return buildErrorResponse("Giỏ hàng trống. Vui lòng thêm sản phẩm trước.");
+                }
+
+                // Tạo order items từ cart
+                List<CreateOrderRequest.OrderItemRequest> items = cart.getItems().stream()
+                        .map(item -> {
+                            CreateOrderRequest.OrderItemRequest orderItem = new CreateOrderRequest.OrderItemRequest();
+                            orderItem.setProductId(item.getProductId());
+                            orderItem.setQuantity(item.getQuantity());
+                            return orderItem;
+                        })
+                        .collect(Collectors.toList());
+                orderRequest.setItems(items);
+
+                log.info("🔵 Order items count: {}", items.size());
+            }
 
             log.info("🔵 Creating order...");
             OrderResponse order = orderService.createOrder(user.getId(), orderRequest);
