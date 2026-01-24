@@ -159,8 +159,13 @@ public class CartServiceImpl implements CartService {
     public void clearCart(Long userId) {
         log.info("🧹 Clearing cart for user {}", userId);
 
-        Cart cart = cartRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giỏ hàng"));
+        // ✅ SỬA: Không throw exception nếu cart không tồn tại
+        Cart cart = cartRepository.findByUserId(userId).orElse(null);
+
+        if (cart == null) {
+            log.info("ℹ️ No cart found for user {} - nothing to clear", userId);
+            return;
+        }
 
         cartItemRepository.deleteAllByCartId(cart.getId());
         cart.getItems().clear();

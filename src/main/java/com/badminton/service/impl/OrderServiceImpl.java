@@ -136,11 +136,17 @@ public class OrderServiceImpl implements OrderService {
         // Save order
         Order savedOrder = orderRepository.save(order);
 
-        // Clear cart after successful order
+        // ✅ SỬA: Clear cart safely - không throw exception nếu cart không tồn tại
+        // Sử dụng try-catch riêng để tránh làm rollback transaction chính
         try {
             cartService.clearCart(userId);
+            log.info("✅ Cart cleared successfully");
+        } catch (ResourceNotFoundException e) {
+            // Ignore if cart doesn't exist - this is expected for "buy now" flow
+            log.info("ℹ️ Cart not found or already empty - this is OK for buy now flow");
         } catch (Exception e) {
-            log.warn("Failed to clear cart after order creation", e);
+            // Log warning but don't fail the order
+            log.warn("⚠️ Failed to clear cart after order creation, but order was created successfully", e);
         }
 
         log.info("Order created successfully: {}", savedOrder.getOrderNumber());
