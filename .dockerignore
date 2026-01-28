@@ -1,10 +1,49 @@
 # .dockerignore
+
+# Build outputs
 target/
 !target/*.jar
-.git
+
+# Git
+.git/
 .gitignore
+
+# Documentation
 README.md
 *.md
-.mvn/wrapper/maven-wrapper.jar
+docs/
+
+# Maven wrapper (we use Docker's Maven)
+.mvn/
 mvnw
 mvnw.cmd
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test
+src/test/
+
+# Environment
+.env
+.env.local
+*.env
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~

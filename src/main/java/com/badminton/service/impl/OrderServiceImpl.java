@@ -66,7 +66,11 @@ public class OrderServiceImpl implements OrderService {
 
         // Create order
         Order order = new Order();
+
         order.setOrderNumber(generateOrderNumber());
+        String momoOrderId = "ORDER_" + order.getOrderNumber() + "_" + System.currentTimeMillis();
+        order.setMomoOrderId(momoOrderId);
+        log.info("✅ Generated momoOrderId: {}", momoOrderId);
         order.setUser(user);
         order.setRecipientName(request.getRecipientName());
         order.setRecipientPhone(request.getRecipientPhone());
