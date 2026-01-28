@@ -1,6 +1,7 @@
 // backend/src/main/java/com/badminton/dto/request/ProductRequest.java
 package com.badminton.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -13,6 +14,7 @@ import java.util.Map;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class ProductRequest {
 
     @NotBlank(message = "Tên sản phẩm không được để trống")
@@ -44,6 +46,10 @@ public class ProductRequest {
     private Map<String, String> specifications; // {"weight": "85g", "balance": "Head Heavy"}
 
     private Boolean featured;
+
+    private Boolean bestseller; // Frontend sends this
+
+    private String warranty; // Frontend sends this (e.g., "12 tháng")
 
     // Custom setter to support both 'stock' (frontend) and 'stockQuantity'
     // (backend)
