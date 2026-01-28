@@ -59,8 +59,16 @@ public class ProductServiceImpl implements ProductService {
             throw new BadRequestException("Tên sản phẩm đã tồn tại");
         }
 
+        // Handle optional fields
+        BigDecimal originalPrice = request.getOriginalPrice() != null
+                ? request.getOriginalPrice()
+                : request.getPrice();
+        String brand = request.getBrand() != null && !request.getBrand().isEmpty()
+                ? request.getBrand()
+                : "Unknown";
+
         // Validate price
-        if (request.getPrice().compareTo(request.getOriginalPrice()) > 0) {
+        if (request.getPrice().compareTo(originalPrice) > 0) {
             throw new BadRequestException("Giá bán không được lớn hơn giá gốc");
         }
 
@@ -69,10 +77,10 @@ public class ProductServiceImpl implements ProductService {
         product.setSlug(generateSlug(request.getName()));
         product.setDescription(request.getDescription());
         product.setPrice(request.getPrice());
-        product.setOriginalPrice(request.getOriginalPrice());
+        product.setOriginalPrice(originalPrice);
         product.setStockQuantity(request.getStockQuantity());
         product.setCategory(category);
-        product.setBrand(request.getBrand());
+        product.setBrand(brand);
         product.setFeatured(request.getFeatured() != null ? request.getFeatured() : false);
         product.setStatus(Product.ProductStatus.ACTIVE);
 
@@ -111,8 +119,16 @@ public class ProductServiceImpl implements ProductService {
             throw new BadRequestException("Tên sản phẩm đã tồn tại");
         }
 
+        // Handle optional fields
+        BigDecimal originalPrice = request.getOriginalPrice() != null
+                ? request.getOriginalPrice()
+                : request.getPrice();
+        String brand = request.getBrand() != null && !request.getBrand().isEmpty()
+                ? request.getBrand()
+                : product.getBrand(); // Keep existing brand if not provided
+
         // Validate price
-        if (request.getPrice().compareTo(request.getOriginalPrice()) > 0) {
+        if (request.getPrice().compareTo(originalPrice) > 0) {
             throw new BadRequestException("Giá bán không được lớn hơn giá gốc");
         }
 
@@ -141,10 +157,10 @@ public class ProductServiceImpl implements ProductService {
         product.setSlug(generateSlug(request.getName()));
         product.setDescription(request.getDescription());
         product.setPrice(request.getPrice());
-        product.setOriginalPrice(request.getOriginalPrice());
+        product.setOriginalPrice(originalPrice);
         product.setStockQuantity(request.getStockQuantity());
         product.setCategory(category);
-        product.setBrand(request.getBrand());
+        product.setBrand(brand);
         product.setFeatured(request.getFeatured() != null ? request.getFeatured() : false);
 
         try {

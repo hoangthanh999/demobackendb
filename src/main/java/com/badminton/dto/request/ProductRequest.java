@@ -26,8 +26,7 @@ public class ProductRequest {
     @DecimalMin(value = "0.0", inclusive = false, message = "Giá bán phải lớn hơn 0")
     private BigDecimal price;
 
-    @NotNull(message = "Giá gốc không được để trống")
-    @DecimalMin(value = "0.0", inclusive = false, message = "Giá gốc phải lớn hơn 0")
+    // Optional: if not provided, use price as originalPrice
     private BigDecimal originalPrice;
 
     @NotNull(message = "Số lượng tồn kho không được để trống")
@@ -39,7 +38,7 @@ public class ProductRequest {
 
     private List<String> images;
 
-    @NotBlank(message = "Thương hiệu không được để trống")
+    // Optional: default to "Unknown" if not provided
     private String brand;
 
     private Map<String, String> specifications; // {"weight": "85g", "balance": "Head Heavy"}

@@ -452,7 +452,8 @@ public class OrderServiceImpl implements OrderService {
     private OrderItemResponse mapToOrderItemResponse(OrderItem item) {
         String productImage = null;
         try {
-            if (item.getProduct().getImages() != null) {
+            // Add null check for product
+            if (item.getProduct() != null && item.getProduct().getImages() != null) {
                 List<String> images = objectMapper.readValue(item.getProduct().getImages(),
                         new TypeReference<List<String>>() {
                         });
@@ -464,9 +465,12 @@ public class OrderServiceImpl implements OrderService {
             log.error("Error processing product images", e);
         }
 
+        // Safely get productId - use from item's product if available
+        Long productId = item.getProduct() != null ? item.getProduct().getId() : null;
+
         return OrderItemResponse.builder()
                 .id(item.getId())
-                .productId(item.getProduct().getId())
+                .productId(productId)
                 .productName(item.getProductName())
                 .productImage(productImage)
                 .price(item.getPrice())
