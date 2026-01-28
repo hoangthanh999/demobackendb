@@ -43,16 +43,30 @@ public class PayOSServiceImpl implements PayOSService {
                     payOSConfig.getApiKey(),
                     payOSConfig.getChecksumKey());
 
-            // 3. Create order code (unique for PayOS)
-            // long orderCode = System.currentTimeMillis() / 1000; // Original line
-
-            long orderCode = Long.parseLong(order.getMomoOrderId());
+            // 3. ✅ FIX: Create order code - Kiểm tra null và tạo mới nếu cần
+            long orderCode;
+            if (order.getMomoOrderId() != null && !order.getMomoOrderId().isEmpty()) {
+                try {
+                    orderCode = Long.parseLong(order.getMomoOrderId());
+                } catch (NumberFormatException e) {
+                    // Nếu không parse được, tạo mới
+                    orderCode = System.currentTimeMillis() / 1000;
+                    order.setMomoOrderId(String.valueOf(orderCode));
+                }
+            } else {
+                // Tạo mới nếu null
+                orderCode = System.currentTimeMillis() / 1000;
+                order.setMomoOrderId(String.valueOf(orderCode));
+            }
 
             // ✅ FIX: Giới hạn description 25 ký tự
-            String description = "DH " + order.getOrderNumber().substring(4, 17); // "DH 20260124_81390" = 17 chars
+            String orderNumberShort = order.getOrderNumber().length() > 20
+                    ? order.getOrderNumber().substring(0, 20)
+                    : order.getOrderNumber();
+            String description = "DH " + orderNumberShort; // Max 23 chars
 
-            String returnUrl = payOSConfig.getReturnUrl() + "?type=order";
-            String cancelUrl = payOSConfig.getCancelUrl() + "?type=order";
+            String returnUrl = payOSConfig.getReturnUrl() + "?type=order&orderId=" + orderId;
+            String cancelUrl = payOSConfig.getCancelUrl() + "?type=order&orderId=" + orderId;
 
             // 4. Create payment link request (v2 API)
             CreatePaymentLinkRequest paymentRequest = CreatePaymentLinkRequest.builder()
@@ -67,7 +81,6 @@ public class PayOSServiceImpl implements PayOSService {
             CreatePaymentLinkResponse response = payOS.paymentRequests().create(paymentRequest);
 
             // 6. Save PayOS order code to order
-            order.setMomoOrderId(String.valueOf(orderCode)); // Reuse this field
             orderRepository.save(order);
 
             log.info("✅ PayOS payment URL created: {}", response.getCheckoutUrl());
