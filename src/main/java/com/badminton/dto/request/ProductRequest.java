@@ -44,4 +44,15 @@ public class ProductRequest {
     private Map<String, String> specifications; // {"weight": "85g", "balance": "Head Heavy"}
 
     private Boolean featured;
+
+    // Custom setter to support both 'stock' (frontend) and 'stockQuantity'
+    // (backend)
+    public void setStock(Integer stock) {
+        this.stockQuantity = stock;
+    }
+
+    // Getter for stock - returns stockQuantity
+    public Integer getStock() {
+        return this.stockQuantity;
+    }
 }
