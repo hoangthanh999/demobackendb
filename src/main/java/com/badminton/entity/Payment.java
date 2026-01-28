@@ -80,4 +80,117 @@ public class Payment {
     public enum PaymentType {
         FULL, DEPOSIT
     }
+
+    // Manual Getters/Setters
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Booking getBooking() {
+        return booking;
+    }
+
+    public void setBooking(Booking booking) {
+        this.booking = booking;
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
+    }
+
+    public BigDecimal getDepositAmount() {
+        return depositAmount;
+    }
+
+    public void setDepositAmount(BigDecimal depositAmount) {
+        this.depositAmount = depositAmount;
+    }
+
+    public BigDecimal getRemainingAmount() {
+        return remainingAmount;
+    }
+
+    public void setRemainingAmount(BigDecimal remainingAmount) {
+        this.remainingAmount = remainingAmount;
+    }
+
+    public PaymentMethod getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void setPaymentMethod(PaymentMethod paymentMethod) {
+        this.paymentMethod = paymentMethod;
+    }
+
+    public PaymentStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(PaymentStatus status) {
+        this.status = status;
+    }
+
+    public PaymentType getPaymentType() {
+        return paymentType;
+    }
+
+    public void setPaymentType(PaymentType paymentType) {
+        this.paymentType = paymentType;
+    }
+
+    public String getTransactionId() {
+        return transactionId;
+    }
+
+    public void setTransactionId(String transactionId) {
+        this.transactionId = transactionId;
+    }
+
+    public String getOrderId() {
+        return orderId;
+    }
+
+    public void setOrderId(String orderId) {
+        this.orderId = orderId;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getPaidAt() {
+        return paidAt;
+    }
+
+    public void setPaidAt(LocalDateTime paidAt) {
+        this.paidAt = paidAt;
+    }
+
+    public LocalDateTime getExpiredAt() {
+        return expiredAt;
+    }
+
+    public void setExpiredAt(LocalDateTime expiredAt) {
+        this.expiredAt = expiredAt;
+    }
 }

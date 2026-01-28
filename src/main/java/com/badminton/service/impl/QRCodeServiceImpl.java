@@ -17,7 +17,8 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -30,8 +31,9 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class QRCodeServiceImpl implements QRCodeService {
+
+    private static final Logger log = LoggerFactory.getLogger(QRCodeServiceImpl.class);
 
     private final BookingRepository bookingRepository;
     private final OrderRepository orderRepository;

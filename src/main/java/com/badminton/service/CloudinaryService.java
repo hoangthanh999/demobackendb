@@ -4,7 +4,8 @@ package com.badminton.service;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -13,8 +14,9 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class CloudinaryService {
+
+    private static final Logger log = LoggerFactory.getLogger(CloudinaryService.class);
 
     @Value("${cloudinary.cloud-name}")
     private String cloudName;

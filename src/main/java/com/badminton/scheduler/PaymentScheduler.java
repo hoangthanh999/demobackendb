@@ -41,4 +41,34 @@ public class PaymentScheduler {
             log.info("Cancelled expired payment for booking: {}", payment.getBooking().getId());
         }
     }
+
+    @Scheduled(fixedRate = 300000) // Chạy mỗi 5 phút
+    @Transactional
+    public void autoCompleteBookings() {
+        LocalDateTime now = LocalDateTime.now();
+
+        List<Booking> bookingsToComplete = bookingRepository.findAll().stream()
+                .filter(b -> b.getStatus() == Booking.BookingStatus.CONFIRMED)
+                .filter(b -> {
+                    LocalDateTime endDateTime = LocalDateTime.of(b.getBookingDate(), b.getEndTime());
+                    return endDateTime.isBefore(now);
+                })
+                .toList();
+
+        for (Booking booking : bookingsToComplete) {
+            booking.setStatus(Booking.BookingStatus.COMPLETED);
+            bookingRepository.save(booking);
+
+            log.info("✅ Auto-completed booking ID: {} (Court: {}, Date: {}, Time: {} - {})",
+                    booking.getId(),
+                    booking.getCourt().getName(),
+                    booking.getBookingDate(),
+                    booking.getStartTime(),
+                    booking.getEndTime());
+        }
+
+        if (!bookingsToComplete.isEmpty()) {
+            log.info("🎯 Completed {} bookings", bookingsToComplete.size());
+        }
+    }
 }
