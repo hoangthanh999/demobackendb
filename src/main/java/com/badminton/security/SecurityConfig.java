@@ -59,6 +59,11 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
 
                 .authorizeHttpRequests(auth -> auth
+                        // ✅ PayOS endpoints
+                        .requestMatchers("/payments/payos/webhook").permitAll()
+                        .requestMatchers("/payments/payos/callback").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/payments/payos/status/**").permitAll()
+
                         // ✅ Existing public endpoints
                         .requestMatchers(
                                 "/auth/**",
