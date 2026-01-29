@@ -49,7 +49,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 // ✅ Mock payment
                 || path.startsWith("/payments/mock/")
                 || path.startsWith("/shop/payments/mock/")
-
+                // ✅ Swagger / OpenAPI - QUAN TRỌNG
+                || path.startsWith("/swagger-ui")
+                || path.equals("/swagger-ui.html")
+                || path.startsWith("/v3/api-docs")
                 || path.equals("/error")
                 || method.equalsIgnoreCase("OPTIONS");
 
