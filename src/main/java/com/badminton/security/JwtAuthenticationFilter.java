@@ -5,7 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j; // ← THÊM
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -18,7 +18,7 @@ import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
-@Slf4j // ← THÊM
+@Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
@@ -34,12 +34,28 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 || (path.equals("/courts") && method.equals("GET"))
                 || path.startsWith("/courts/search")
                 || (path.matches("/courts/\\d+") && method.equals("GET"))
+
+                // ✅ PayOS endpoints - QUAN TRỌNG!
+                || path.equals("/payments/payos/webhook") // ← THÊM DÒNG NÀY
+                || path.equals("/payments/payos/callback") // ← THÊM DÒNG NÀY
+                || path.startsWith("/payments/payos/status/") // ← THÊM DÒNG NÀY
+
+                // ✅ MoMo webhook
                 || path.equals("/payments/momo/webhook")
-                || path.startsWith("/payments/mock/") // ← ĐÃ CÓ NHƯNG VẪN BỊ CHẶN
+
+                // ✅ VNPay callback
+                || path.equals("/payments/vnpay/callback")
+
+                // ✅ Mock payment
+                || path.startsWith("/payments/mock/")
+                || path.startsWith("/shop/payments/mock/")
+
                 || path.equals("/error")
                 || method.equalsIgnoreCase("OPTIONS");
 
-        if (!shouldSkip) {
+        if (shouldSkip) {
+            log.info("⏭️  SKIPPING JWT Filter for: {} {}", method, path);
+        } else {
             log.debug("🔒 JWT Filter will process: {} {}", method, path);
         }
 
@@ -55,7 +71,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         String method = request.getMethod();
 
-        log.info("🔵 JWT Filter RUNNING for: {} {}", method, path); // ← THÊM LOG NÀY
+        log.info("🔵 JWT Filter RUNNING for: {} {}", method, path);
 
         try {
             String jwt = getJwtFromRequest(request);
@@ -89,7 +105,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     log.error("❌ JWT validation FAILED");
                 }
             } else {
-                log.error("❌ NO JWT found in request");
+                log.warn("⚠️  NO JWT found in request (path: {})", path);
             }
         } catch (Exception ex) {
             log.error("❌ JWT Filter exception", ex);
@@ -102,17 +118,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private String getJwtFromRequest(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
 
-        log.info("📋 Authorization header: {}",
+        log.debug("📋 Authorization header: {}",
                 bearerToken != null ? bearerToken.substring(0, Math.min(30, bearerToken.length())) + "..." : "NULL");
 
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
             String token = bearerToken.substring(7);
-            log.info("✅ Extracted JWT: {}...", token.substring(0, Math.min(30, token.length())));
+            log.debug("✅ Extracted JWT: {}...", token.substring(0, Math.min(30, token.length())));
             return token;
         }
 
-        log.warn("⚠️ No valid Bearer token found");
         return null;
     }
-
 }
