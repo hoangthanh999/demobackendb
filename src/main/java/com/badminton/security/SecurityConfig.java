@@ -63,7 +63,13 @@ public class SecurityConfig {
                         .requestMatchers("/payments/payos/webhook").permitAll()
                         .requestMatchers("/payments/payos/callback").permitAll()
                         .requestMatchers(HttpMethod.GET, "/payments/payos/status/**").permitAll()
-
+                        // ✅ Swagger / OpenAPI
+                        .requestMatchers(
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs",
+                                "/v3/api-docs/**")
+                        .permitAll()
                         // ✅ Existing public endpoints
                         .requestMatchers(
                                 "/auth/**",
